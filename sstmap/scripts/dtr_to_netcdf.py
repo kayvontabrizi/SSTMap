@@ -11,14 +11,22 @@ def parse_args():
         The namespace containing the arguments
     """
     parser = ArgumentParser(
-        description='''Run GIST calculations through command-line.''')
+        description="""Run GIST calculations through command-line."""
+    )
 
-    parser.add_argument('-i', '--input_parm', required=False, type=str,
-                        help='''Input toplogy File.''')
-    parser.add_argument('-t', '--input_traj', required=True, type=str,
-                        help='''Input trajectory file.''')
-    parser.add_argument('-o', '--output_prefix', required=False, type=str,
-                        help='''Prefix for all the results files.''')
+    parser.add_argument(
+        "-i", "--input_parm", required=False, type=str, help="""Input toplogy File."""
+    )
+    parser.add_argument(
+        "-t", "--input_traj", required=True, type=str, help="""Input trajectory file."""
+    )
+    parser.add_argument(
+        "-o",
+        "--output_prefix",
+        required=False,
+        type=str,
+        help="""Prefix for all the results files.""",
+    )
     args = parser.parse_args()
     return args
 
@@ -39,5 +47,5 @@ def entry_point():
     main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     entry_point()

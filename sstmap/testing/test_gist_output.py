@@ -10,26 +10,45 @@ Use numpy testing module.
 Test quantities: divide into three groups
 """
 
-
 import os
 
 import numpy as np
 import numpy.testing as npt
 
-quantities = ["voxel", "xcoord", "ycoord", "zcoord",
-                "n_wat", "g_O", 
-                "dTStrans-dens", "dTStrans-norm", 
-                "dTSorient-dens", "dTSorient-norm", 
-                "dTSsix-dens", "dTSsix-norm", 
-                "Esw-dens", "Esw-norm", "Eww-dens", "Eww-norm-unref", 
-                "neighbor-dens", "neighbor-norm"]
+quantities = [
+    "voxel",
+    "xcoord",
+    "ycoord",
+    "zcoord",
+    "n_wat",
+    "g_O",
+    "dTStrans-dens",
+    "dTStrans-norm",
+    "dTSorient-dens",
+    "dTSorient-norm",
+    "dTSsix-dens",
+    "dTSsix-norm",
+    "Esw-dens",
+    "Esw-norm",
+    "Eww-dens",
+    "Eww-norm-unref",
+    "neighbor-dens",
+    "neighbor-norm",
+]
 
-DX_TEST_FILES = ["gO", "dTSorient-dens", "dTStrans-dens", "dTSsix-dens", "Eww-dens", "Esw-dens"]
+DX_TEST_FILES = [
+    "gO",
+    "dTSorient-dens",
+    "dTStrans-dens",
+    "dTSsix-dens",
+    "Eww-dens",
+    "Esw-dens",
+]
 
-class TestGistOutput():
-    """
-    """
-    
+
+class TestGistOutput:
+    """ """
+
     def __init__(self, test_data, ref_data):
         """
 
@@ -46,11 +65,13 @@ class TestGistOutput():
         Returns:
 
         """
-        
+
         passed = True
         try:
-            #npt.assert_equal(self.test_data.shape, self.ref_data.shape)
-            npt.assert_almost_equal(self.test_data[:, 1:4], self.ref_data[:, 1:4], decimal=3)
+            # npt.assert_equal(self.test_data.shape, self.ref_data.shape)
+            npt.assert_almost_equal(
+                self.test_data[:, 1:4], self.ref_data[:, 1:4], decimal=3
+            )
         except Exception as e:
             print(e)
             passed = False
@@ -85,12 +106,17 @@ class TestGistOutput():
 
         passed = True
         try:
-            npt.assert_array_almost_equal(self.test_data[:, quantity_index], self.ref_data[:, quantity_index], decimal=2)
+            npt.assert_array_almost_equal(
+                self.test_data[:, quantity_index],
+                self.ref_data[:, quantity_index],
+                decimal=2,
+            )
         except Exception as e:
             print(e)
             passed = False
 
         return passed
+
 
 def read_gist_sstmap(sstmap_gist_summary):
     """
@@ -103,8 +129,9 @@ def read_gist_sstmap(sstmap_gist_summary):
     """
     columns_to_read = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 19]
     sstmap_data = np.loadtxt(sstmap_gist_summary, skiprows=1, usecols=columns_to_read)
-    #sstmap_data = sstmap_data[np.where(sstmap_data[:, 4] != 1.0)]
+    # sstmap_data = sstmap_data[np.where(sstmap_data[:, 4] != 1.0)]
     return np.round(sstmap_data, 3)
+
 
 def read_gist_cpptraj(cpptraj_gist_summary):
     """
@@ -118,6 +145,7 @@ def read_gist_cpptraj(cpptraj_gist_summary):
     columns_to_read = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 21, 22]
     cpptraj_data = np.loadtxt(cpptraj_gist_summary, skiprows=2, usecols=columns_to_read)
     return cpptraj_data
+
 
 def test_dx_output(test_dx_filename, ref_dx_filename, test_nwat_array, ref_nwat_array):
     """
@@ -143,7 +171,7 @@ def test_dx_output(test_dx_filename, ref_dx_filename, test_nwat_array, ref_nwat_
         test_voxel_num = int(lines[6].strip().split()[-3])
         test_data = []
         for i in range(len(lines[7:])):
-            
+
             test_data.extend([float(s) for s in lines[7:][i].strip().split()])
         test_data = np.asarray(test_data)
 
@@ -169,7 +197,7 @@ def test_dx_output(test_dx_filename, ref_dx_filename, test_nwat_array, ref_nwat_
         print("\tPassed!")
     except Exception as e:
         print(e)
-        #for i in range(test_data.shape[0]):
+        # for i in range(test_data.shape[0]):
         #    if abs(test_data[i] - ref_data[i]) >= 0.001:
         #        print(i, ref_data[i], ref_nwat_array[i], test_data[i], test_nwat_array[i])
 
@@ -182,14 +210,27 @@ def parse_args():
     args : argparse.Namespace
         The namespace containing the arguments
     """
-    parser = ArgumentParser(description='''Run tests of GIST calculations against validated output.''')
+    parser = ArgumentParser(
+        description="""Run tests of GIST calculations against validated output."""
+    )
 
-    parser.add_argument('-t', '--test_gist_summary', required=True, type=str,
-                        help='''Summary file of GIST calculation to be tested.''')
-    parser.add_argument('-r', '--ref_gist_summary', required=True, type=str,
-                        help='''A refeeence summary file of GIST calculation''')
+    parser.add_argument(
+        "-t",
+        "--test_gist_summary",
+        required=True,
+        type=str,
+        help="""Summary file of GIST calculation to be tested.""",
+    )
+    parser.add_argument(
+        "-r",
+        "--ref_gist_summary",
+        required=True,
+        type=str,
+        help="""A refeeence summary file of GIST calculation""",
+    )
     args = parser.parse_args()
     return args
+
 
 def run_all_gist_tests(test_dir, ref_dir):
     """
@@ -204,15 +245,22 @@ def run_all_gist_tests(test_dir, ref_dir):
     ref_dir_path = os.path.abspath(ref_dir) + "/"
     file_dict = {}
     if not os.path.exists(test_dir_path) or not os.path.exists(ref_dir_path):
-        raise IOError("%s and/or %s directory not found, please provide correct path." % (test_dir, ref_dir))
+        raise IOError(
+            "%s and/or %s directory not found, please provide correct path."
+            % (test_dir, ref_dir)
+        )
     else:
         test_dir_files = os.listdir(test_dir_path)
         ref_dir_files = os.listdir(ref_dir_path)
         test_dx_files = [f for f in test_dir_files if f.endswith(".dx")]
-        test_dx_files = [f for f in test_dx_files if f[f.find("_") + 1:][:-3] in DX_TEST_FILES]
+        test_dx_files = [
+            f for f in test_dx_files if f[f.find("_") + 1 :][:-3] in DX_TEST_FILES
+        ]
         ref_dx_files = [f for f in ref_dir_files if f.endswith(".dx")]
         ref_dx_files = [f for f in ref_dx_files if f[5:][:-3] in DX_TEST_FILES]
-        assert len(test_dx_files) == len(ref_dx_files), "Couldn't obtain all DX files, tests won't run."
+        assert len(test_dx_files) == len(
+            ref_dx_files
+        ), "Couldn't obtain all DX files, tests won't run."
         for f in ref_dx_files:
             suffix = f[5:]
             corresponding_test_file = [t for t in test_dx_files if suffix in t]
@@ -220,11 +268,17 @@ def run_all_gist_tests(test_dir, ref_dir):
                 raise Exception(ValueError, "%s: corresponding test file not found.", f)
             else:
                 file_dict[f] = corresponding_test_file[0]
-        test_data_file = [test_dir_path + f for f in test_dir_files if f.endswith("gist_data.txt")]
+        test_data_file = [
+            test_dir_path + f for f in test_dir_files if f.endswith("gist_data.txt")
+        ]
         test_data = read_gist_sstmap(test_data_file[0])
-        ref_data_file = [ref_dir_path + f for f in ref_dir_files if f.endswith("all.out")]
+        ref_data_file = [
+            ref_dir_path + f for f in ref_dir_files if f.endswith("all.out")
+        ]
         ref_data = read_gist_cpptraj(ref_data_file[0])
-        assert test_data.shape == ref_data.shape, "GIST columns/rows in summary files are not equal, tests won't run"
+        assert (
+            test_data.shape == ref_data.shape
+        ), "GIST columns/rows in summary files are not equal, tests won't run"
         diff_nwat = []
         for row in range(test_data.shape[0]):
             if test_data[row, 4] <= 1:
@@ -258,12 +312,12 @@ def run_all_gist_tests(test_dir, ref_dir):
 
     """
 
-def main():
-    """
 
-    """
+def main():
+    """ """
     args = parse_args()
     run_all_gist_tests(args.test_gist_summary, args.ref_gist_summary)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

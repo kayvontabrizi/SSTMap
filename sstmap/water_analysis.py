@@ -1,6 +1,6 @@
 ##############################################################################
 #  SSTMap: A Python library for the calculation of water structure and
-#         thermodynamics on solute surfaces from molecular dynamics 
+#         thermodynamics on solute surfaces from molecular dynamics
 #         trajectories.
 # MIT License
 # Copyright 2016-2017 Lehman College City University of New York and the Authors
@@ -57,33 +57,64 @@ from sstmap.utils import *
 ##############################################################################
 
 DON_ACC_LIST = ["oxygen", "nitrogen", "sulfur"]
-_WATER_RESNAMES = ['H2O', 'HHO', 'OHH', 'HOH',  'OH2', 'SOL', 'WAT', 'TIP', 'TIP2', 'TIP3', 'TIP4', 'T3P', 'T4P', 'T5P']
+_WATER_RESNAMES = [
+    "H2O",
+    "HHO",
+    "OHH",
+    "HOH",
+    "OH2",
+    "SOL",
+    "WAT",
+    "TIP",
+    "TIP2",
+    "TIP3",
+    "TIP4",
+    "T3P",
+    "T4P",
+    "T5P",
+]
 ANGLE_CUTOFF_RAD = 0.523599
-requirements = {   
+requirements = {
     "prmtop": ["prmtop", "", "lorentz-bertholot"],
     "parm7": ["parm7", "", "lorentz-bertholot"],
-    "psf": ["toppar", "Please provide a folder named toppar that contains charmm parameter/topology files.",
-            "lorentz-bertholot"],
-    "gro": ["top", "Please provide graomcs .top file corresponding to your system and also make sure that .itp files "
-                   "are present in the directory where calculations are being run. To get a list of .itp files being "
-                   "used by gromacs topology file, type $grep #include ", "lorentz-bertholot"],
-    "pdb": ["txt", "Please provide a text file containing non-bonded parameters for your system.", "geometric"],
-    "h5": ["txth5", "Please provide a text file containing non-bonded parameters for your system.", "lorentz-bertholot"],
-    }
+    "psf": [
+        "toppar",
+        "Please provide a folder named toppar that contains charmm parameter/topology files.",
+        "lorentz-bertholot",
+    ],
+    "gro": [
+        "top",
+        "Please provide graomcs .top file corresponding to your system and also make sure that .itp files "
+        "are present in the directory where calculations are being run. To get a list of .itp files being "
+        "used by gromacs topology file, type $grep #include ",
+        "lorentz-bertholot",
+    ],
+    "pdb": [
+        "txt",
+        "Please provide a text file containing non-bonded parameters for your system.",
+        "geometric",
+    ],
+    "h5": [
+        "txth5",
+        "Please provide a text file containing non-bonded parameters for your system.",
+        "lorentz-bertholot",
+    ],
+}
 
 ##############################################################################
 # WaterAnalysis class definition
 ##############################################################################
 
+
 class WaterAnalysis(object):
-    """Parent class for setting up water analysis calculations in molecular 
+    """Parent class for setting up water analysis calculations in molecular
     dynamics trajectories.
     """
 
     def __init__(self, topology_file, trajectory, supporting_file=None):
         """Initialize WaterAnalysis object for a trajectory and
         corresponding topology file.
-        
+
         Parameters
         ----------
         topology_file : string
@@ -109,11 +140,14 @@ class WaterAnalysis(object):
             self.comb_rule = requirements[topology_extension][-1]
         else:
             if topology_extension not in list(requirements.keys()):
-                message = """SSTMap currently does not support %s topology file type.
+                message = (
+                    """SSTMap currently does not support %s topology file type.
                 If this is a non-standard force-filed, consider using a PDB file as a topplogy
                 and provide a text file containing non-bonded parameters for each atom in your system.
                 See sstmap.org for more details.
-                """ % topology_extension
+                """
+                    % topology_extension
+                )
                 sys.exit(message)
             else:
                 self.supporting_file = supporting_file
@@ -125,7 +159,9 @@ class WaterAnalysis(object):
             first_frame = md.load_frame(self.trajectory, 0)
         else:
             first_frame = md.load_frame(self.trajectory, 0, top=self.topology_file)
-        assert first_frame.unitcell_lengths is not None, "Could not detect unit cell information."
+        assert (
+            first_frame.unitcell_lengths is not None
+        ), "Could not detect unit cell information."
         self.topology = first_frame.topology
 
         # Create index arrays for iteration over groups of atoms and perform some sanity checks on system topology
@@ -134,46 +170,62 @@ class WaterAnalysis(object):
             if i < len(_WATER_RESNAMES) - 1:
                 super_wat_select_exp += "resname %s or " % wat_res
             else:
-                super_wat_select_exp += "resname %s" % wat_res        
+                super_wat_select_exp += "resname %s" % wat_res
         self.all_atom_ids = self.topology.select("all")
         self.prot_atom_ids = self.topology.select("protein")
         self.wat_atom_ids = self.topology.select("water")
         self.set_neighbors("water and name O")
         if self.wat_atom_ids.shape[0] == 0:
             self.wat_atom_ids = self.topology.select(super_wat_select_exp)
-        assert (self.wat_atom_ids.shape[0] != 0), \
-            "Unable to recognize water residues in the system!"
-        assert (self.topology.atom(self.wat_atom_ids[0]).name == "O"), \
-            "Failed while constructing water oxygen atom indices!"
-        self.wat_oxygen_atom_ids = np.asarray([atom for atom in self.wat_atom_ids if self.topology.atom(atom).name == "O"])
+        assert (
+            self.wat_atom_ids.shape[0] != 0
+        ), "Unable to recognize water residues in the system!"
+        assert (
+            self.topology.atom(self.wat_atom_ids[0]).name == "O"
+        ), "Failed while constructing water oxygen atom indices!"
+        self.wat_oxygen_atom_ids = np.asarray(
+            [atom for atom in self.wat_atom_ids if self.topology.atom(atom).name == "O"]
+        )
         self.water_sites = self.wat_oxygen_atom_ids[1] - self.wat_oxygen_atom_ids[0]
         for i in self.wat_oxygen_atom_ids:
-            O, H1, H2 = self.topology.atom(i).name[0], self.topology.atom(i + 1).name[0], self.topology.atom(i + 2).name[0]
+            O, H1, H2 = (
+                self.topology.atom(i).name[0],
+                self.topology.atom(i + 1).name[0],
+                self.topology.atom(i + 2).name[0],
+            )
             if O != "O" or H1 != "H" or H2 != "H":
-                sys.exit("Water molecules in the topology must be organized as Oxygen, Hydrogen, Hydrogen, Virtual-sites.")
+                sys.exit(
+                    "Water molecules in the topology must be organized as Oxygen, Hydrogen, Hydrogen, Virtual-sites."
+                )
         self.non_water_atom_ids = np.setdiff1d(self.all_atom_ids, self.wat_atom_ids)
         # ions or ligands
-        self.non_prot_atom_ids = np.setdiff1d(self.non_water_atom_ids, self.prot_atom_ids)
+        self.non_prot_atom_ids = np.setdiff1d(
+            self.non_water_atom_ids, self.prot_atom_ids
+        )
         # if no protein, then set other solute to protein index variable for energy calculation purposes
         if self.prot_atom_ids.shape[0] == 0:
             self.prot_atom_ids = self.non_water_atom_ids
-        assert (self.wat_atom_ids.shape[0] + self.non_water_atom_ids.shape[0] == self.all_atom_ids.shape[0]), \
-            "Failed to partition atom indices in the system correctly!"
+        assert (
+            self.wat_atom_ids.shape[0] + self.non_water_atom_ids.shape[0]
+            == self.all_atom_ids.shape[0]
+        ), "Failed to partition atom indices in the system correctly!"
 
         # Obtain non-bonded parameters for the system
         print("Obtaining non-bonded parameters for the system ...")
         self.chg_product, self.acoeff, self.bcoeff = self.generate_nonbonded_params()
-        assert self.chg_product.shape == self.acoeff.shape == self.bcoeff.shape, \
-            "Mismatch in non-bonded parameter matrices, exiting."
+        assert (
+            self.chg_product.shape == self.acoeff.shape == self.bcoeff.shape
+        ), "Mismatch in non-bonded parameter matrices, exiting."
         print("Done.")
 
         # Assign a hydrogen bond to atoms
         print("Assigning hydrogen bond types ...")
         self.don_H_pair_dict = {}
-        self.prot_hb_types = np.zeros(len(self.all_atom_ids), dtype=np.int_)
-        self.solute_acc_ids, self.solute_don_ids, self.solute_acc_don_ids = self.assign_hb_types()
+        self.prot_hb_types = np.zeros(len(self.all_atom_ids), dtype=int)
+        self.solute_acc_ids, self.solute_don_ids, self.solute_acc_don_ids = (
+            self.assign_hb_types()
+        )
         print("Done.")
-
 
     def set_neighbors(self, mask):
         """Method for setting atoms that should be used during shell-wise breakdown
@@ -185,9 +237,8 @@ class WaterAnalysis(object):
 
         """
 
-        self.neighbor_ids   = self.topology.select(mask)
-        self.wat_nbrs_shell = np.zeros(self.neighbor_ids.shape[0], dtype=np.int)
-
+        self.neighbor_ids = self.topology.select(mask)
+        self.wat_nbrs_shell = np.zeros(self.neighbor_ids.shape[0], dtype=int)
 
     @function_timer
     def assign_hb_types(self):
@@ -220,8 +271,11 @@ class WaterAnalysis(object):
         don_list = []
         acc_don_list = []
         # obtain a list of non-water bonds
-        non_water_bonds = [(bond[0].index, bond[1].index)
-                           for bond in self.topology.bonds if bond[0].residue.name not in _WATER_RESNAMES]
+        non_water_bonds = [
+            (bond[0].index, bond[1].index)
+            for bond in self.topology.bonds
+            if bond[0].residue.name not in _WATER_RESNAMES
+        ]
         dist_pairs = []
         keys_all = []
 
@@ -276,9 +330,9 @@ class WaterAnalysis(object):
             else:
                 self.don_H_pair_dict[pair[0]].append([pair[0], pair[1]])
 
-        solute_acc_ids = np.array(acc_list, dtype=np.int)
-        solute_acc_don_ids = np.array(acc_don_list, dtype=np.int)
-        solute_don_ids = np.array(don_list, dtype=np.int)
+        solute_acc_ids = np.array(acc_list, dtype=int)
+        solute_acc_don_ids = np.array(acc_don_list, dtype=int)
+        solute_don_ids = np.array(don_list, dtype=int)
 
         for at_id in solute_acc_ids:
             self.prot_hb_types[at_id] = 1
@@ -329,22 +383,34 @@ class WaterAnalysis(object):
         elif self.topology_file.endswith(".psf"):
             parmed_topology_object = pmd.load_file(self.topology_file)
             param_dir = os.path.abspath(self.supporting_file)
-            param_files = [os.path.join(param_dir, f) for f in os.listdir(param_dir) 
-                if os.path.isfile(os.path.join(param_dir, f)) and f.endswith((".rtf", ".top", ".par", ".prm", ".inp", ".str"))]
+            param_files = [
+                os.path.join(param_dir, f)
+                for f in os.listdir(param_dir)
+                if os.path.isfile(os.path.join(param_dir, f))
+                and f.endswith((".rtf", ".top", ".par", ".prm", ".inp", ".str"))
+            ]
             params = CharmmParameterSet(*param_files)
             try:
                 parmed_topology_object.load_parameters(params)
             except Exception as e:
                 print(e)
             for at in self.all_atom_ids:
-                vdw.append([parmed_topology_object.atoms[at].sigma,
-                            parmed_topology_object.atoms[at].epsilon])
+                vdw.append(
+                    [
+                        parmed_topology_object.atoms[at].sigma,
+                        parmed_topology_object.atoms[at].epsilon,
+                    ]
+                )
                 chg.append(parmed_topology_object.atoms[at].charge)
         else:
             parmed_topology_object = pmd.load_file(self.supporting_file)
             for at in self.all_atom_ids:
-                vdw.append([parmed_topology_object.atoms[at].sigma,
-                            parmed_topology_object.atoms[at].epsilon])
+                vdw.append(
+                    [
+                        parmed_topology_object.atoms[at].sigma,
+                        parmed_topology_object.atoms[at].epsilon,
+                    ]
+                )
                 chg.append(parmed_topology_object.atoms[at].charge)
 
         # User provided charges are assumed to be in correct units.
@@ -352,11 +418,17 @@ class WaterAnalysis(object):
         if not self.supporting_file.endswith(".txt"):
             chg = np.asarray(chg) * 18.2223
         vdw = np.asarray(vdw)
-        water_chg = chg[self.wat_atom_ids[0:self.water_sites]].reshape(self.water_sites, 1)
+        water_chg = chg[self.wat_atom_ids[0 : self.water_sites]].reshape(
+            self.water_sites, 1
+        )
         chg_product = water_chg * np.tile(chg[self.all_atom_ids], (self.water_sites, 1))
 
-        water_sig = vdw[self.wat_atom_ids[0:self.water_sites], 0].reshape(self.water_sites, 1)
-        water_eps = vdw[self.wat_atom_ids[0:self.water_sites], 1].reshape(self.water_sites, 1)
+        water_sig = vdw[self.wat_atom_ids[0 : self.water_sites], 0].reshape(
+            self.water_sites, 1
+        )
+        water_eps = vdw[self.wat_atom_ids[0 : self.water_sites], 1].reshape(
+            self.water_sites, 1
+        )
         mixed_sig, mixed_eps = None, None
         if self.comb_rule is None or self.comb_rule == "lorentz-bertholot":
             mixed_sig = 0.5 * (water_sig + vdw[self.all_atom_ids, 0])
@@ -371,7 +443,6 @@ class WaterAnalysis(object):
         else:
             raise Exception("Couldn't assign vdw params")
         return chg_product, acoeff, bcoeff
-
 
     def calculate_hydrogen_bonds(self, traj, water, nbrs, water_water=True):
         """Calculates hydrogen bonds made by a water molecule with its first shell
@@ -399,13 +470,26 @@ class WaterAnalysis(object):
         if water_water:
             for wat_nbr in nbrs:
                 angle_triplets.extend(
-                    [[water, wat_nbr, wat_nbr + 1], [water, wat_nbr, wat_nbr + 2], [wat_nbr, water, water + 1],
-                     [wat_nbr, water, water + 2]])
+                    [
+                        [water, wat_nbr, wat_nbr + 1],
+                        [water, wat_nbr, wat_nbr + 2],
+                        [wat_nbr, water, water + 1],
+                        [wat_nbr, water, water + 2],
+                    ]
+                )
         else:
             for solute_nbr in nbrs:
-                if self.prot_hb_types[solute_nbr] == 1 or self.prot_hb_types[solute_nbr] == 3:
-                    angle_triplets.extend([[solute_nbr, water, water + 1], [solute_nbr, water, water + 2]])
-                if self.prot_hb_types[solute_nbr] == 2 or self.prot_hb_types[solute_nbr] == 3:
+                if (
+                    self.prot_hb_types[solute_nbr] == 1
+                    or self.prot_hb_types[solute_nbr] == 3
+                ):
+                    angle_triplets.extend(
+                        [[solute_nbr, water, water + 1], [solute_nbr, water, water + 2]]
+                    )
+                if (
+                    self.prot_hb_types[solute_nbr] == 2
+                    or self.prot_hb_types[solute_nbr] == 3
+                ):
                     for don_H_pair in self.don_H_pair_dict[solute_nbr]:
                         angle_triplets.extend([[water, solute_nbr, don_H_pair[1]]])
 
@@ -414,7 +498,6 @@ class WaterAnalysis(object):
         angles[np.isnan(angles)] = 0.0
         hbonds = angle_triplets[np.where(angles[0, :] <= ANGLE_CUTOFF_RAD)]
         return hbonds
-
 
     def water_nbr_orientations(self, traj, water, nbrs):
         """Calculates orientations of the neighboring water molecules of a given water molecule. The orientation is
@@ -438,10 +521,18 @@ class WaterAnalysis(object):
         angle_triplets = []
         for wat_nbr in nbrs:
             angle_triplets.extend(
-                [[water, wat_nbr, wat_nbr + 1], [water, wat_nbr, wat_nbr + 2], [wat_nbr, water, water + 1],
-                 [wat_nbr, water, water + 2]])
+                [
+                    [water, wat_nbr, wat_nbr + 1],
+                    [water, wat_nbr, wat_nbr + 2],
+                    [wat_nbr, water, water + 1],
+                    [wat_nbr, water, water + 2],
+                ]
+            )
         angle_triplets = np.asarray(angle_triplets)
         angles = md.compute_angles(traj, angle_triplets)
         angles[np.isnan(angles)] = 0.0
-        wat_orientations = [np.rad2deg(np.min(angles[0, i*4:(i*4)+4])) for i in range(nbrs.shape[0])]
+        wat_orientations = [
+            np.rad2deg(np.min(angles[0, i * 4 : (i * 4) + 4]))
+            for i in range(nbrs.shape[0])
+        ]
         return wat_orientations

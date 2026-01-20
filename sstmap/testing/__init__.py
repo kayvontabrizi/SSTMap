@@ -1,6 +1,6 @@
 #############################################################################
-# SSTMap: A Python library for the calculation of water structure and 
-#         thermodynamics on solute surfaces from molecular dynamics 
+# SSTMap: A Python library for the calculation of water structure and
+#         thermodynamics on solute surfaces from molecular dynamics
 #         trajectories.
 # Copyright 2016-2017 Lehman College City University of New York and the Authors
 #

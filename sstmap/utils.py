@@ -34,7 +34,8 @@ from functools import wraps
 import numpy as np
 from scipy import stats
 import matplotlib as mpl
-mpl.use('Agg')
+
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib import cm
@@ -43,28 +44,30 @@ from matplotlib import cm
 # Utilities
 ##############################################################################
 
+
 def function_timer(function):
     @wraps(function)
     def function_timer(*args, **kwargs):
         t0 = time.time()
         result = function(*args, **kwargs)
         t1 = time.time()
-        print(("Total time running %s: %2.2f seconds" %
-               (function.__name__, t1-t0)))
+        print(("Total time running %s: %2.2f seconds" % (function.__name__, t1 - t0)))
         return result
+
     return function_timer
 
-def print_progress_bar (count, total):
+
+def print_progress_bar(count, total):
     """
     Create and update progress bar during a loop.
-    
+
     Parameters
     ----------
     iteration : int
-        The number of current iteration, used to calculate current progress. 
+        The number of current iteration, used to calculate current progress.
     total : int
         Total number of iterations
-    
+
     Notes
     -----
         Based on:
@@ -74,16 +77,17 @@ def print_progress_bar (count, total):
     filled_len = int(round(bar_len * count / float(total)))
 
     percents = round(100.0 * count / float(total), 1)
-    bar = "=" * filled_len + ' ' * (bar_len - filled_len)
+    bar = "=" * filled_len + " " * (bar_len - filled_len)
 
-    sys.stdout.write('Progress |%s| %s%s Done.\r' % (bar, percents, '%'))
+    sys.stdout.write("Progress |%s| %s%s Done.\r" % (bar, percents, "%"))
     sys.stdout.flush()
-    if count == total: 
+    if count == total:
         print()
 
 
-
-def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nbrs=None):
+def plot_enbr(
+    data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nbrs=None
+):
     """
     Generate an Enbr plot for an arbitrary list of sites. First site should be the reference system.
     sites: a list of keys which represent site labels
@@ -91,7 +95,7 @@ def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nb
     x_values: data points on x-axis
     nbr_norm: Normalize by number of neighbors
     outname: name of output file
-    
+
     Parameters
     ----------
     data_dir : TYPE
@@ -112,28 +116,31 @@ def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nb
     nbr_values = []
 
     if not os.path.isdir(data_dir):
-        sys.exit(
-            "Data directory not found, please check path of the directory again.")
+        sys.exit("Data directory not found, please check path of the directory again.")
 
     if site_indices is None:
+        enbr_files = [f for f in os.listdir(data_dir) if f.endswith("Ewwnbr.txt")]
+        if nbr_norm:
+            nbr_files = [f for f in os.listdir(data_dir) if f.endswith("Nnbrs.txt")]
+    else:
         enbr_files = [
-            f for f in os.listdir(data_dir) if f.endswith("Ewwnbr.txt")]
+            f
+            for f in os.listdir(data_dir)
+            if f.endswith("Ewwnbr.txt") and int(f[0:3]) in site_indices
+        ]
         if nbr_norm:
             nbr_files = [
-                f for f in os.listdir(data_dir) if f.endswith("Nnbrs.txt")]
-    else:
-        enbr_files = [f for f in os.listdir(data_dir) if f.endswith(
-            "Ewwnbr.txt") and int(f[0:3]) in site_indices]
-        if nbr_norm:
-            nbr_files = [f for f in os.listdir(data_dir) if f.endswith(
-                "Nnbrs.txt") and int(f[0:3]) in site_indices]
+                f
+                for f in os.listdir(data_dir)
+                if f.endswith("Nnbrs.txt") and int(f[0:3]) in site_indices
+            ]
 
     for index, file in enumerate(enbr_files):
         site_i = int(file[0:3])
         enbr[site_i] = np.loadtxt(data_dir + "/" + file)
         if nbr_norm:
             nbrs = np.loadtxt(data_dir + "/" + nbr_files[index])
-            nbr_values.append(np.sum(nbrs) /nbrs.shape[0])
+            nbr_values.append(np.sum(nbrs) / nbrs.shape[0])
     if ref_data is not None:
         ref_enbr = np.loadtxt(ref_data)
         if nbr_norm:
@@ -142,7 +149,7 @@ def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nb
     for index, site_i in enumerate(enbr.keys()):
         print(("Generating Enbr plot for: ", site_i, enbr_files[index]))
         # Get x and p_x for current site
-        site_enbr = enbr[site_i]*0.5
+        site_enbr = enbr[site_i] * 0.5
         x_low, x_high = -5.0, 3.0
         enbr_min, enbr_max = np.min(site_enbr), np.max(site_enbr)
         if enbr_min < x_low:
@@ -170,12 +177,12 @@ def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nb
         ax.yaxis.set_ticks(np.arange(start, end, 0.2))
         start, end = ax.get_xlim()
         ax.xaxis.set_ticks(np.arange(start, end, 2.0))
-        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
-        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
-        x_label = r'$\mathit{E_{n} (kcal/mol)}$'
-        y_label = r'$\mathit{\rho(E_{n})}$'
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%0.1f"))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%0.1f"))
+        x_label = r"$\mathit{E_{n} (kcal/mol)}$"
+        y_label = r"$\mathit{\rho(E_{n})}$"
         if nbr_norm:
-            y_label = r'$\mathit{\rho(E_{n})N^{nbr}}$'
+            y_label = r"$\mathit{\rho(E_{n})N^{nbr}}$"
         ax.set_xlabel(x_label, size=14)
         ax.set_ylabel(y_label, size=14)
         ax.yaxis.tick_left()
@@ -183,24 +190,28 @@ def plot_enbr(data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nb
         ax.spines["right"].set_visible(False)
         ax.spines["top"].set_visible(False)
         plt.minorticks_on()
-        plt.tick_params(which='major', width=1, length=4, direction='in')
-        plt.tick_params(which='minor', width=1, length=2, direction='in')
-        plt.tick_params(axis='x', labelsize=12)
-        plt.tick_params(axis='y', labelsize=12)
-        plt.plot(
-            x, p_x, antialiased=True, linewidth=1.0, color="red", label=site_i)
+        plt.tick_params(which="major", width=1, length=4, direction="in")
+        plt.tick_params(which="minor", width=1, length=2, direction="in")
+        plt.tick_params(axis="x", labelsize=12)
+        plt.tick_params(axis="y", labelsize=12)
+        plt.plot(x, p_x, antialiased=True, linewidth=1.0, color="red", label=site_i)
         if p_x_ref is not None:
-            plt.plot(x, p_x_ref, antialiased=True, linewidth=1.0,
-                     color="green", label="Reference")
+            plt.plot(
+                x,
+                p_x_ref,
+                antialiased=True,
+                linewidth=1.0,
+                color="green",
+                label="Reference",
+            )
         fig_name = "%03d_" % site_i
-        plt.legend(loc='upper right', prop={'size': 10}, frameon=False)
+        plt.legend(loc="upper right", prop={"size": 10}, frameon=False)
         plt.tight_layout()
         plt.savefig(data_dir + "/" + fig_name + "Enbr_plot.png", dpi=300)
         plt.close()
 
 
 def plot_rtheta(data_dir, site_indices=None):
-
     """
     Parameters
     ----------
@@ -208,22 +219,23 @@ def plot_rtheta(data_dir, site_indices=None):
         Description
     site_indices : None, optional
         Description
-    
+
     """
     rtheta_files = []
     rtheta_data = {}
 
     print(data_dir)
     if not os.path.isdir(data_dir):
-        sys.exit(
-            "Data directory not found, please check path of the directory again.")
+        sys.exit("Data directory not found, please check path of the directory again.")
 
     if site_indices is None:
-        rtheta_files = [
-            f for f in os.listdir(data_dir) if f.endswith("r_theta.txt")]
+        rtheta_files = [f for f in os.listdir(data_dir) if f.endswith("r_theta.txt")]
     else:
-        rtheta_files = [f for f in os.listdir(data_dir) if f.endswith(
-            "r_theta.txt") and int(f[0:3]) in site_indices]
+        rtheta_files = [
+            f
+            for f in os.listdir(data_dir)
+            if f.endswith("r_theta.txt") and int(f[0:3]) in site_indices
+        ]
 
     for index, file in enumerate(rtheta_files):
         site_i = int(file[0:3])
@@ -233,10 +245,10 @@ def plot_rtheta(data_dir, site_indices=None):
     for index, site_i in enumerate(rtheta_data.keys()):
         print(("Generating r_theta plot for: ", site_i, rtheta_files[index]))
         fig = plt.figure()
-        ax = fig.gca(projection='3d')
+        ax = fig.add_subplot(projection="3d")
         theta = rtheta_data[site_i][:, 0]
         r = rtheta_data[site_i][:, 1]
-        #Nnbr = len(r)/nwat
+        # Nnbr = len(r)/nwat
         # print nwat, Nnbr
         # generate index matrices
         X, Y = np.mgrid[0:130:131j, 2.0:6.0:41j]
@@ -245,8 +257,8 @@ def plot_rtheta(data_dir, site_indices=None):
         kernel = stats.gaussian_kde(values)
         positions = np.vstack([X.ravel(), Y.ravel()])
         Z = np.reshape(kernel(positions).T, X.shape)
-        Z *= integ_counts*0.1
-        #Z /= integ_counts
+        Z *= integ_counts * 0.1
+        # Z /= integ_counts
         sum_counts_kernel = 0
         # print kernel.n
         # correct Z
@@ -258,42 +270,52 @@ def plot_rtheta(data_dir, site_indices=None):
             vol_low = (4.0 / 3.0) * np.pi * (d_low**3)
             shell_vol = vol - vol_low
 
-            counts_bulk = 0.0329*shell_vol
+            counts_bulk = 0.0329 * shell_vol
             sum_counts_kernel += np.sum(Z[:, i])
-            #Z[:,i] /= counts_bulk
-            Z[:, i] = Z[:, i],counts_bulk
+            # Z[:,i] /= counts_bulk
+            Z[:, i] = Z[:, i], counts_bulk
 
         print(sum_counts_kernel)
         legend_label = "%03d_" % site_i
-        ax.plot_surface(X, Y, Z, rstride=1, cstride=1, linewidth=0.5,
-                        antialiased=True, alpha=1.0, cmap=cm.coolwarm, label=legend_label)
+        ax.plot_surface(
+            X,
+            Y,
+            Z,
+            rstride=1,
+            cstride=1,
+            linewidth=0.5,
+            antialiased=True,
+            alpha=1.0,
+            cmap=cm.coolwarm,
+            label=legend_label,
+        )
         x_label = r"$\theta^\circ$"
         y_label = r"$r (\AA)$"
         ax.set_xlabel(x_label)
         ax.set_xlim(0, 130)
         ax.set_ylabel(y_label)
         ax.set_ylim(2.0, 6.0)
-        z_label = r'$\mathrm{P(\theta, \AA)}$'
+        z_label = r"$\mathrm{P(\theta, \AA)}$"
         ax.set_zlabel(z_label)
-        #ax.legend(legend_label, loc='upper left', prop={'size':6})
-        #ax.set_zlim(0.0, 0.15)
+        # ax.legend(legend_label, loc='upper left', prop={'size':6})
+        # ax.set_zlim(0.0, 0.15)
         plt.savefig(data_dir + "/" + legend_label + "rtheta_plot.png", dpi=300)
         plt.close()
 
 
 def read_hsa_summary(hsa_data_file):
-    '''
+    """
     Returns a dictionary with hydration site index as keys and a list of various attributes as values.
     Parameters
     ----------
     hsa_data_file : string
-        Text file containing 
-    
+        Text file containing
+
     Returns
     -------
-    '''
+    """
 
-    f = open(hsa_data_file, 'r')
+    f = open(hsa_data_file, "r")
     data = f.readlines()
     hsa_header = data[0]
     data_keys = hsa_header.strip("\n").split()
@@ -303,20 +325,21 @@ def read_hsa_summary(hsa_data_file):
         hsa_data[int(l.strip("\n").split()[0])] = float_converted_data
     f.close()
     return hsa_data
+
 
 def read_gist_summary(gist_data_file):
-    '''
+    """
     Returns a dictionary with hydration site index as keys and a list of various attributes as values.
     Parameters
     ----------
     hsa_data_file : string
-        Text file containing 
-    
+        Text file containing
+
     Returns
     -------
-    '''
+    """
 
-    f = open(hsa_data_file, 'r')
+    f = open(hsa_data_file, "r")
     data = f.readlines()
     hsa_header = data[0]
     data_keys = hsa_header.strip("\n").split()
@@ -326,10 +349,11 @@ def read_gist_summary(gist_data_file):
         hsa_data[int(l.strip("\n").split()[0])] = float_converted_data
     f.close()
     return hsa_data
+
 
 def write_watpdb_from_list(coords, filename, water_id_list, full_water_res=False):
     """Summary
-    
+
     Parameters
     ----------
     traj : TYPE
@@ -342,7 +366,7 @@ def write_watpdb_from_list(coords, filename, water_id_list, full_water_res=False
         Description
     full_water_res : bool, optional
         Description
-    
+
     Returns
     -------
     TYPE
@@ -355,33 +379,71 @@ def write_watpdb_from_list(coords, filename, water_id_list, full_water_res=False
     # at_index, wat in enumerate(water_id_list):
     at = 1
     res = 1
-    with open(filename + ".pdb", 'w') as f:
+    with open(filename + ".pdb", "w") as f:
         for i in range(len(water_id_list)):
             wat = water_id_list[i]
-            at_index = at #% 10000
+            at_index = at  # % 10000
             res_index = res % 10000
-            #wat_coords = md.utils.in_units_of(
+            # wat_coords = md.utils.in_units_of(
             #    coords[wat[0], wat[1], :], "nanometers", "angstroms")
             wat_coords = coords[wat[0], wat[1], :]
-            #chain_id = possible_chains[chain_id_index]
+            # chain_id = possible_chains[chain_id_index]
             chain_id = "A"
             pdb_line = pdb_line_format.format(
-                "ATOM", at_index, "O", " ", "WAT", chain_id, res_index, " ", wat_coords, 0.00, 0.00, "O")
-            #pdb_lines.append(pdb_line)
+                "ATOM",
+                at_index,
+                "O",
+                " ",
+                "WAT",
+                chain_id,
+                res_index,
+                " ",
+                wat_coords,
+                0.00,
+                0.00,
+                "O",
+            )
+            # pdb_lines.append(pdb_line)
             f.write(pdb_line)
-        
+
             if full_water_res:
-                #H1_coords = md.utils.in_units_of(
+                # H1_coords = md.utils.in_units_of(
                 #    coords[wat[0], wat[1] + 1, :], "nanometers", "angstroms")
                 H1_coords = coords[wat[0], wat[1] + 1, :]
-                pdb_line_H1 = pdb_line_format.format("ATOM", at_index + 1, "H1", " ", "WAT", chain_id, res_index, " ", H1_coords, 0.00, 0.00, "H")
-                #pdb_lines.append(pdb_line_H1)
+                pdb_line_H1 = pdb_line_format.format(
+                    "ATOM",
+                    at_index + 1,
+                    "H1",
+                    " ",
+                    "WAT",
+                    chain_id,
+                    res_index,
+                    " ",
+                    H1_coords,
+                    0.00,
+                    0.00,
+                    "H",
+                )
+                # pdb_lines.append(pdb_line_H1)
                 f.write(pdb_line_H1)
-                #H2_coords = md.utils.in_units_of(
+                # H2_coords = md.utils.in_units_of(
                 #    coords[wat[0], wat[1] + 2, :], "nanometers", "angstroms")
                 H2_coords = coords[wat[0], wat[1] + 2, :]
-                pdb_line_H2 = pdb_line_format.format("ATOM", at_index + 2, "H2", " ", "WAT", chain_id, res_index, " ", H2_coords, 0.00, 0.00, "H")
-                #pdb_lines.append(pdb_line_H2)
+                pdb_line_H2 = pdb_line_format.format(
+                    "ATOM",
+                    at_index + 2,
+                    "H2",
+                    " ",
+                    "WAT",
+                    chain_id,
+                    res_index,
+                    " ",
+                    H2_coords,
+                    0.00,
+                    0.00,
+                    "H",
+                )
+                # pdb_lines.append(pdb_line_H2)
                 f.write(pdb_line_H2)
                 at += 3
                 res += 1
@@ -389,17 +451,16 @@ def write_watpdb_from_list(coords, filename, water_id_list, full_water_res=False
                 at += 1
                 res += 1
             if res_index == 9999:
-                ter_line = ter_line_format.format(
-                    "TER", at, "WAT", chain_id, res_index)
+                ter_line = ter_line_format.format("TER", at, "WAT", chain_id, res_index)
                 at = 1
-                #pdb_lines.append(ter_line)
-    #pdb_lines.append("END")
-    #np.savetxt(filename + ".pdb", np.asarray(pdb_lines), fmt="%s")
+                # pdb_lines.append(ter_line)
+    # pdb_lines.append("END")
+    # np.savetxt(filename + ".pdb", np.asarray(pdb_lines), fmt="%s")
 
 
 def write_watpdb_from_coords(filename, coords, full_water_res=False):
     """Summary
-    
+
     Parameters
     ----------
     traj : TYPE
@@ -412,7 +473,7 @@ def write_watpdb_from_coords(filename, coords, full_water_res=False):
         Description
     full_water_res : bool, optional
         Description
-    
+
     Returns
     -------
     TYPE
@@ -427,7 +488,7 @@ def write_watpdb_from_coords(filename, coords, full_water_res=False):
     at = 0
     res = 0
     wat_i = 0
-    with open(filename + ".pdb", 'w') as f:
+    with open(filename + ".pdb", "w") as f:
         f.write("REMARK Initial number of clusters: N/A\n")
         while wat_i < len(coords):
             at_index = at  # % 10000
@@ -438,7 +499,19 @@ def write_watpdb_from_coords(filename, coords, full_water_res=False):
             # chain_id = possible_chains[chain_id_index]
             chain_id = "A"
             pdb_line = pdb_line_format.format(
-                "ATOM", at_index, "O", " ", "WAT", chain_id, res_index, " ", wat_coords, 0.00, 0.00, "O")
+                "ATOM",
+                at_index,
+                "O",
+                " ",
+                "WAT",
+                chain_id,
+                res_index,
+                " ",
+                wat_coords,
+                0.00,
+                0.00,
+                "O",
+            )
             # pdb_lines.append(pdb_line)
             f.write(pdb_line)
             wat_i += 1
@@ -446,15 +519,39 @@ def write_watpdb_from_coords(filename, coords, full_water_res=False):
                 # H1_coords = md.utils.in_units_of(
                 #    coords[wat[0], wat[1] + 1, :], "nanometers", "angstroms")
                 H1_coords = coords[wat_i]
-                pdb_line_H1 = pdb_line_format.format("ATOM", at_index + 1, "H1", " ", "WAT", chain_id, res_index, " ",
-                                                     H1_coords, 0.00, 0.00, "H")
+                pdb_line_H1 = pdb_line_format.format(
+                    "ATOM",
+                    at_index + 1,
+                    "H1",
+                    " ",
+                    "WAT",
+                    chain_id,
+                    res_index,
+                    " ",
+                    H1_coords,
+                    0.00,
+                    0.00,
+                    "H",
+                )
                 # pdb_lines.append(pdb_line_H1)
                 f.write(pdb_line_H1)
                 # H2_coords = md.utils.in_units_of(
                 #    coords[wat[0], wat[1] + 2, :], "nanometers", "angstroms")
                 H2_coords = coords[wat_i + 1]
-                pdb_line_H2 = pdb_line_format.format("ATOM", at_index + 2, "H2", " ", "WAT", chain_id, res_index, " ",
-                                                     H2_coords, 0.00, 0.00, "H")
+                pdb_line_H2 = pdb_line_format.format(
+                    "ATOM",
+                    at_index + 2,
+                    "H2",
+                    " ",
+                    "WAT",
+                    chain_id,
+                    res_index,
+                    " ",
+                    H2_coords,
+                    0.00,
+                    0.00,
+                    "H",
+                )
                 # pdb_lines.append(pdb_line_H2)
                 f.write(pdb_line_H2)
                 at += 3
@@ -493,19 +590,45 @@ def write_watpdb_from_coords(filename, coords, full_water_res=False):
     
     """
 
+
 class GISTFields:
-    data_titles = ['index', 'x', 'y', 'z',
-                  'N_wat', 'g_O', 'g_H',
-                  'TS_tr_dens', 'TS_tr_norm',
-                  'TS_or_dens', 'TS_or_norm',
-                  'dTSsix-dens', 'dTSsix_norm',
-                  'E_sw_dens', 'E_sw_norm', 'E_ww_dens', 'Eww_norm',
-                  'E_ww_nbr_dens', 'E_ww_nbr_norm',
-                  'N_nbr_dens', 'N_nbr_norm',
-                  'f_hb_dens', 'f_hb_norm',
-                  'N_hb_sw_dens', 'N_hb_sw_norm', 'N_hb_ww_dens', 'N_hb_ww_norm',
-                  'N_don_sw_dens', 'N_don_sw_norm', 'N_acc_sw_dens', 'N_acc_sw_norm',
-                  'N_don_ww_dens', 'N_don_ww_norm', 'N_acc_ww_dens', 'N_acc_ww_norm']
+    data_titles = [
+        "index",
+        "x",
+        "y",
+        "z",
+        "N_wat",
+        "g_O",
+        "g_H",
+        "TS_tr_dens",
+        "TS_tr_norm",
+        "TS_or_dens",
+        "TS_or_norm",
+        "dTSsix-dens",
+        "dTSsix_norm",
+        "E_sw_dens",
+        "E_sw_norm",
+        "E_ww_dens",
+        "Eww_norm",
+        "E_ww_nbr_dens",
+        "E_ww_nbr_norm",
+        "N_nbr_dens",
+        "N_nbr_norm",
+        "f_hb_dens",
+        "f_hb_norm",
+        "N_hb_sw_dens",
+        "N_hb_sw_norm",
+        "N_hb_ww_dens",
+        "N_hb_ww_norm",
+        "N_don_sw_dens",
+        "N_don_sw_norm",
+        "N_acc_sw_dens",
+        "N_acc_sw_norm",
+        "N_don_ww_dens",
+        "N_don_ww_norm",
+        "N_acc_ww_dens",
+        "N_acc_ww_norm",
+    ]
     index = 0
     x = 1
     y = 2
@@ -542,19 +665,45 @@ class GISTFields:
     N_acc_ww_dens = 33
     N_acc_ww_norm = 34
 
+
 class HSAFields:
-    data_titles = ['index', 'x', 'y', 'z',
-                  'N_wat', 'g_O', 'g_H',
-                  'TS_tr_dens', 'TS_tr_norm',
-                  'TS_or_dens', 'TS_or_norm',
-                  'dTSsix-dens', 'dTSsix_norm',
-                  'E_sw_dens', 'E_sw_norm', 'E_ww_dens', 'Eww_norm',
-                  'E_ww_nbr_dens', 'E_ww_nbr_norm',
-                  'N_nbr_dens', 'N_nbr_norm',
-                  'f_hb_dens', 'f_hb_norm',
-                  'N_hb_sw_dens', 'N_hb_sw_norm', 'N_hb_ww_dens', 'N_hb_ww_norm',
-                  'N_don_sw_dens', 'N_don_sw_norm', 'N_acc_sw_dens', 'N_acc_sw_norm',
-                  'N_don_ww_dens', 'N_don_ww_norm', 'N_acc_ww_dens', 'N_acc_ww_norm']
+    data_titles = [
+        "index",
+        "x",
+        "y",
+        "z",
+        "N_wat",
+        "g_O",
+        "g_H",
+        "TS_tr_dens",
+        "TS_tr_norm",
+        "TS_or_dens",
+        "TS_or_norm",
+        "dTSsix-dens",
+        "dTSsix_norm",
+        "E_sw_dens",
+        "E_sw_norm",
+        "E_ww_dens",
+        "Eww_norm",
+        "E_ww_nbr_dens",
+        "E_ww_nbr_norm",
+        "N_nbr_dens",
+        "N_nbr_norm",
+        "f_hb_dens",
+        "f_hb_norm",
+        "N_hb_sw_dens",
+        "N_hb_sw_norm",
+        "N_hb_ww_dens",
+        "N_hb_ww_norm",
+        "N_don_sw_dens",
+        "N_don_sw_norm",
+        "N_acc_sw_dens",
+        "N_acc_sw_norm",
+        "N_don_ww_dens",
+        "N_don_ww_norm",
+        "N_acc_ww_dens",
+        "N_acc_ww_norm",
+    ]
     index = 0
     x = 1
     y = 2

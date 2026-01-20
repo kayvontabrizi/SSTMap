@@ -23,13 +23,20 @@ def write_nonbonded_parameters(cms_file):
         n_pseudo_sites = 0
         vdw_type = {}  # dict of vdw types, Vdw object in this list are uninitialized
         for e in ct.ffio.vdwtype:
-            vdw_type[e.name] = Vdw((e.name,), e.funct, (e.c1, e.c2,))
-            #print (e.name,), e.funct, (e.c1, e.c2,)
+            vdw_type[e.name] = Vdw(
+                (e.name,),
+                e.funct,
+                (
+                    e.c1,
+                    e.c2,
+                ),
+            )
+            # print (e.name,), e.funct, (e.c1, e.c2,)
 
         # for each site (i.e., an atom in most cases)
         for e in ct.ffio.site:
             # print e.type.lower()
-            if e.type.lower() == 'pseudo':
+            if e.type.lower() == "pseudo":
                 # add to vdw list for this ct
                 ct_pseudo_vdw.append(vdw_type[e.vdwtype])
                 ct_pseudo_chg.append(e.charge)
@@ -41,7 +48,7 @@ def write_nonbonded_parameters(cms_file):
                 n_atomic_sites += 1
 
             # print e.index, e.charge
-                # check if this site belongs to pseudoparticle, if yes raise corresponding number
+            # check if this site belongs to pseudoparticle, if yes raise corresponding number
         # print n_atomic_sites, n_pseudo_sites
         ct_vdw *= int(ct.atom_total / n_atomic_sites)
         ct_chg *= int(ct.atom_total / n_atomic_sites)
@@ -61,11 +68,14 @@ def write_nonbonded_parameters(cms_file):
     vdw_params = np.asarray(vdw_params)
     with open(cms_file[0:-4] + "_cms_nb_parms.txt", "w") as f:
         for i in range(vdw_params.shape[0]):
-            f.write("{0:.8f} {1:.8f} {2:.8f}\n".format(
-                chg[i], vdw_params[i, 0], vdw_params[i, 1]))
+            f.write(
+                "{0:.8f} {1:.8f} {2:.8f}\n".format(
+                    chg[i], vdw_params[i, 0], vdw_params[i, 1]
+                )
+            )
     # return (chg, vdw_params)
 
 
-if (__name__ == '__main__'):
+if __name__ == "__main__":
     cms_file = sys.argv[1]
     write_nonbonded_parameters(cms_file)

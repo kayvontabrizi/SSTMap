@@ -1,16 +1,24 @@
-import numpy as np
+## imports
+
+# custom
+import numpy
 
 
-def rotate_check(matrix):
+## methods
 
-    if not (0.99 < np.linalg.det(matrix) < 1.01):
 
+def rotate_check(matrix: numpy.ndarray):
+    determinant = numpy.linalg.det(matrix)
+    if not (0.99 < determinant < 1.01):
         raise Warning(
             "Warning: Determinant of rotation matrix is %s. Should be close to +1.0."
-            % np.linalg.det(matrix)
+            % determinant
         )
 
 
-def do_rotation(crds, origin, rot_mat):
-
-    return (crds - origin).dot(rot_mat) + origin
+def do_rotation(
+    coordinates: numpy.ndarray,
+    origin: numpy.ndarray,
+    rotation_matrix: numpy.ndarray,
+) -> numpy.ndarray:
+    return (coordinates - origin).dot(rotation_matrix) + origin

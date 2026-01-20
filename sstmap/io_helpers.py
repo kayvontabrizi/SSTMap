@@ -1,117 +1,81 @@
 # encoding: utf-8
-import numpy as np
+
+## imports
+
+# standard
+import typing
+
+# custom
+import numpy
 
 
-def are_you_numpy(a):
-    """
-    Returns True if a is an instance of numpy.
-    False otherwise.
-    """
-
-    return type(a).__module__ == np.__name__
+## methods
 
 
-def make_grid(arrays, out=None):
-    """
-    !!! Adapted from:
-    !!! http://stackoverflow.com/questions/1208118/using-numpy-to-build-an-array-of-all-combinations-of-two-arrays
+def are_you_numpy(value: typing.Any) -> bool:
+    return type(value).__module__ == numpy.__name__
 
-    Generate a cartesian product of input arrays.
 
-    Parameters
-    ----------
-    arrays : list of array-like
-            1-D arrays to form the cartesian product of.
-    out : ndarray
-            Array to place the cartesian product in.
-
-    Returns
-    -------
-    out : ndarray
-            2-D array of shape (M, len(arrays)) containing cartesian products
-            formed of input arrays.
-
-    Examples
-    --------
-    >>> make_grid(([1, 2, 3], [4, 5], [6, 7]))
-    array([[1, 4, 6],
-                    [1, 4, 7],
-                    [1, 5, 6],
-                    [1, 5, 7],
-                    [2, 4, 6],
-                    [2, 4, 7],
-                    [2, 5, 6],
-                    [2, 5, 7],
-                    [3, 4, 6],
-                    [3, 4, 7],
-                    [3, 5, 6],
-                    [3, 5, 7]])
-
-    """
-
-    arrays = [np.asarray(x) for x in arrays]
-
-    dtype = arrays[0].dtype
-
-    n = np.prod([x.size for x in arrays])
+def make_grid(
+    arrays: tuple[numpy.ndarray, ...],
+    out: typing.Optional[numpy.ndarray] = None,
+) -> numpy.ndarray:
+    arrays_list = [numpy.asarray(x) for x in arrays]
+    dtype = arrays_list[0].dtype
+    total_elements = numpy.prod([x.size for x in arrays_list])
 
     if out is None:
+        out = numpy.zeros([total_elements, len(arrays_list)], dtype=dtype)
 
-        out = np.zeros([n, len(arrays)], dtype=dtype)
+    multiplier = total_elements // arrays_list[0].size
+    out[:, 0] = numpy.repeat(arrays_list[0], multiplier)
 
-    m = n // arrays[0].size
-
-    out[:, 0] = np.repeat(arrays[0], m)
-
-    if arrays[1:]:
-
-        make_grid(arrays[1:], out=out[0:m, 1:])
-
-        for j in range(1, arrays[0].size):
-
-            out[j * m : (j + 1) * m, 1:] = out[0:m, 1:]
+    if arrays_list[1:]:
+        make_grid(tuple(arrays_list[1:]), out=out[0:multiplier, 1:])
+        for index in range(1, arrays_list[0].size):
+            out[index * multiplier : (index + 1) * multiplier, 1:] = out[
+                0:multiplier, 1:
+            ]
 
     return out
 
 
-def bounding_box_frac(frac_structure, delta=np.ones(3), _buffer=0.0, verbose=False):
-    """
-    Input is structure in cart. or frac. coordinates as
-    nx3 array (n= number of coordinates).
-    Output is coordinate meshgrid array with coordinates of
-    bounding box lattice as integers.
-    """
-
-    bounding_min = np.array(
+def bounding_box_frac(
+    fractional_structure: numpy.ndarray,
+    delta: numpy.ndarray = numpy.ones(3),
+    buffer_size: float = 0.0,
+    verbose: bool = False,
+) -> numpy.ndarray:
+    bounding_min = numpy.array(
         [
-            np.min(frac_structure[:, 0]),
-            np.min(frac_structure[:, 1]),
-            np.min(frac_structure[:, 2]),
+            numpy.min(fractional_structure[:, 0]),
+            numpy.min(fractional_structure[:, 1]),
+            numpy.min(fractional_structure[:, 2]),
         ],
         dtype=int,
     )
 
-    bounding_max = np.array(
+    bounding_max = numpy.array(
         [
-            np.max(frac_structure[:, 0]),
-            np.max(frac_structure[:, 1]),
-            np.max(frac_structure[:, 2]),
+            numpy.max(fractional_structure[:, 0]),
+            numpy.max(fractional_structure[:, 1]),
+            numpy.max(fractional_structure[:, 2]),
         ],
         dtype=int,
     )
 
-    bounding_min -= int(np.round(_buffer))
-    bounding_max += int(np.round(_buffer))
+    bounding_min -= int(numpy.round(buffer_size))
+    bounding_max += int(numpy.round(buffer_size))
 
     if verbose:
         print("Bounding min. ", bounding_min)
         print("Bounding max. ", bounding_max)
-        print(np.arange(bounding_min[2], bounding_max[2] + 1, delta[2], dtype=int))
+        print(numpy.arange(bounding_min[2], bounding_max[2] + 1, delta[2], dtype=int))
 
     return make_grid(
-        [
-            np.arange(bounding_min[0], bounding_max[0] + 1, delta[0], dtype=int),
-            np.arange(bounding_min[1], bounding_max[1] + 1, delta[1], dtype=int),
-            np.arange(bounding_min[2], bounding_max[2] + 1, delta[2], dtype=int),
-        ]
+        (
+            numpy.arange(bounding_min[0], bounding_max[0] + 1, delta[0], dtype=int),
+            numpy.arange(bounding_min[1], bounding_max[1] + 1, delta[1], dtype=int),
+            numpy.arange(bounding_min[2], bounding_max[2] + 1, delta[2], dtype=int),
+        )
     )

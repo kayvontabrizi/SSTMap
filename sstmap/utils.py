@@ -26,569 +26,458 @@
 # SOFTWARE.
 ###############################################################################
 
-import sys
+## imports
+
+# standard
 import os
+import sys
 import time
-from functools import wraps
+import functools
+import typing
 
-import numpy as np
-from scipy import stats
-import matplotlib as mpl
+# custom
+import numpy
+import scipy.stats
+import matplotlib
+import matplotlib.pyplot
+import matplotlib.ticker
+import matplotlib.cm
 
-mpl.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from matplotlib import cm
-
-##############################################################################
-# Utilities
-##############################################################################
+matplotlib.use("Agg")
 
 
-def function_timer(function):
-    @wraps(function)
-    def function_timer(*args, **kwargs):
-        t0 = time.time()
+## methods
+
+
+def function_timer(
+    function: typing.Callable[..., typing.Any],
+) -> typing.Callable[..., typing.Any]:
+    @functools.wraps(function)
+    def timed_function(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        start_time = time.time()
         result = function(*args, **kwargs)
-        t1 = time.time()
-        print(("Total time running %s: %2.2f seconds" % (function.__name__, t1 - t0)))
+        end_time = time.time()
+        print(
+            "Total time running %s: %2.2f seconds"
+            % (function.__name__, end_time - start_time)
+        )
         return result
 
-    return function_timer
+    return timed_function
 
 
-def print_progress_bar(count, total):
-    """
-    Create and update progress bar during a loop.
-
-    Parameters
-    ----------
-    iteration : int
-        The number of current iteration, used to calculate current progress.
-    total : int
-        Total number of iterations
-
-    Notes
-    -----
-        Based on:
-        http://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
-    """
-    bar_len = 20
-    filled_len = int(round(bar_len * count / float(total)))
-
-    percents = round(100.0 * count / float(total), 1)
-    bar = "=" * filled_len + " " * (bar_len - filled_len)
-
-    sys.stdout.write("Progress |%s| %s%s Done.\r" % (bar, percents, "%"))
+def print_progress_bar(count: int, total: int):
+    bar_length = 20
+    filled_length = int(round(bar_length * count / float(total)))
+    percentage = round(100.0 * count / float(total), 1)
+    bar = "=" * filled_length + " " * (bar_length - filled_length)
+    sys.stdout.write("Progress |%s| %s%s Done.\r" % (bar, percentage, "%"))
     sys.stdout.flush()
     if count == total:
         print()
 
 
 def plot_enbr(
-    data_dir, site_indices=None, nbr_norm=False, ref_data=None, ref_nbrs=None
+    data_directory: str,
+    site_indices: typing.Optional[list[int]] = None,
+    neighbor_normalization: bool = False,
+    reference_data: typing.Optional[str] = None,
+    reference_neighbors: typing.Optional[float] = None,
 ):
-    """
-    Generate an Enbr plot for an arbitrary list of sites. First site should be the reference system.
-    sites: a list of keys which represent site labels
-    data: a dictionary of sites
-    x_values: data points on x-axis
-    nbr_norm: Normalize by number of neighbors
-    outname: name of output file
+    energy_neighbor_files: list[str] = []
+    energy_neighbor_data: dict[int, numpy.ndarray] = {}
+    reference_energy_neighbor: typing.Optional[numpy.ndarray] = None
+    neighbor_files: list[str] = []
+    neighbor_values: list[float] = []
 
-    Parameters
-    ----------
-    data_dir : TYPE
-        Description
-    site_indices : None, optional
-        Description
-    nbr_norm : bool, optional
-        Description
-    ref_data : None, optional
-        Description
-    ref_nbrs : None, optional
-        Description
-    """
-    enbr_files = []
-    enbr = {}
-    ref_enbr = None
-    nbr_files = []
-    nbr_values = []
-
-    if not os.path.isdir(data_dir):
+    if not os.path.isdir(data_directory):
         sys.exit("Data directory not found, please check path of the directory again.")
 
     if site_indices is None:
-        enbr_files = [f for f in os.listdir(data_dir) if f.endswith("Ewwnbr.txt")]
-        if nbr_norm:
-            nbr_files = [f for f in os.listdir(data_dir) if f.endswith("Nnbrs.txt")]
-    else:
-        enbr_files = [
-            f
-            for f in os.listdir(data_dir)
-            if f.endswith("Ewwnbr.txt") and int(f[0:3]) in site_indices
+        energy_neighbor_files = [
+            filename
+            for filename in os.listdir(data_directory)
+            if filename.endswith("Ewwnbr.txt")
         ]
-        if nbr_norm:
-            nbr_files = [
-                f
-                for f in os.listdir(data_dir)
-                if f.endswith("Nnbrs.txt") and int(f[0:3]) in site_indices
+        if neighbor_normalization:
+            neighbor_files = [
+                filename
+                for filename in os.listdir(data_directory)
+                if filename.endswith("Nnbrs.txt")
+            ]
+    else:
+        energy_neighbor_files = [
+            filename
+            for filename in os.listdir(data_directory)
+            if filename.endswith("Ewwnbr.txt") and int(filename[0:3]) in site_indices
+        ]
+        if neighbor_normalization:
+            neighbor_files = [
+                filename
+                for filename in os.listdir(data_directory)
+                if filename.endswith("Nnbrs.txt") and int(filename[0:3]) in site_indices
             ]
 
-    for index, file in enumerate(enbr_files):
-        site_i = int(file[0:3])
-        enbr[site_i] = np.loadtxt(data_dir + "/" + file)
-        if nbr_norm:
-            nbrs = np.loadtxt(data_dir + "/" + nbr_files[index])
-            nbr_values.append(np.sum(nbrs) / nbrs.shape[0])
-    if ref_data is not None:
-        ref_enbr = np.loadtxt(ref_data)
-        if nbr_norm:
-            ref_enbr *= ref_nbrs
+    for index, filename in enumerate(energy_neighbor_files):
+        site_index = int(filename[0:3])
+        energy_neighbor_data[site_index] = numpy.loadtxt(
+            data_directory + "/" + filename
+        )
+        if neighbor_normalization:
+            neighbors = numpy.loadtxt(data_directory + "/" + neighbor_files[index])
+            neighbor_values.append(numpy.sum(neighbors) / neighbors.shape[0])
 
-    for index, site_i in enumerate(enbr.keys()):
-        print(("Generating Enbr plot for: ", site_i, enbr_files[index]))
-        # Get x and p_x for current site
-        site_enbr = enbr[site_i] * 0.5
+    if reference_data is not None:
+        reference_energy_neighbor = numpy.loadtxt(reference_data)
+        if neighbor_normalization and reference_neighbors is not None:
+            reference_energy_neighbor *= reference_neighbors
+
+    for index, site_index in enumerate(energy_neighbor_data.keys()):
+        print(("Generating Enbr plot for: ", site_index, energy_neighbor_files[index]))
+        site_energy_neighbor = energy_neighbor_data[site_index] * 0.5
         x_low, x_high = -5.0, 3.0
-        enbr_min, enbr_max = np.min(site_enbr), np.max(site_enbr)
-        if enbr_min < x_low:
-            x_low = enbr_min
-        if enbr_max > x_high:
-            x_high = enbr_max
+        energy_min, energy_max = (
+            numpy.min(site_energy_neighbor),
+            numpy.max(site_energy_neighbor),
+        )
+        if energy_min < x_low:
+            x_low = energy_min
+        if energy_max > x_high:
+            x_high = energy_max
 
-        x = np.linspace(x_low, x_high)
-        kernel = stats.gaussian_kde(site_enbr)
-        p_x = kernel.evaluate(x)
-        if nbr_norm:
-            site_nbrs = nbr_values[index]
-            p_x *= site_nbrs
-        # Get x and p_x for reference site, if available
-        p_x_ref = None
-        if ref_enbr is not None:
-            kernel = stats.gaussian_kde(ref_enbr)
-            p_x_ref = kernel.evaluate(x)
-        # Set up plot
-        fig, ax = plt.subplots(1)
-        fig.set_size_inches(3, 3)
-        plt.xlim(x_low, x_high)
-        plt.ylim(0.0, np.max(p_x) + 0.1)
-        start, end = ax.get_ylim()
-        ax.yaxis.set_ticks(np.arange(start, end, 0.2))
-        start, end = ax.get_xlim()
-        ax.xaxis.set_ticks(np.arange(start, end, 2.0))
-        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter("%0.1f"))
-        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter("%0.1f"))
+        x_values = numpy.linspace(x_low, x_high)
+        kernel = scipy.stats.gaussian_kde(site_energy_neighbor)
+        probability_x = kernel.evaluate(x_values)
+        if neighbor_normalization:
+            site_neighbors = neighbor_values[index]
+            probability_x *= site_neighbors
+
+        probability_x_reference: typing.Optional[numpy.ndarray] = None
+        if reference_energy_neighbor is not None:
+            kernel = scipy.stats.gaussian_kde(reference_energy_neighbor)
+            probability_x_reference = kernel.evaluate(x_values)
+
+        figure, axes = matplotlib.pyplot.subplots(1)
+        figure.set_size_inches(3, 3)
+        matplotlib.pyplot.xlim(x_low, x_high)
+        matplotlib.pyplot.ylim(0.0, numpy.max(probability_x) + 0.1)
+        start, end = axes.get_ylim()
+        axes.yaxis.set_ticks(numpy.arange(start, end, 0.2))
+        start, end = axes.get_xlim()
+        axes.xaxis.set_ticks(numpy.arange(start, end, 2.0))
+        axes.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%0.1f"))
+        axes.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%0.1f"))
         x_label = r"$\mathit{E_{n} (kcal/mol)}$"
         y_label = r"$\mathit{\rho(E_{n})}$"
-        if nbr_norm:
+        if neighbor_normalization:
             y_label = r"$\mathit{\rho(E_{n})N^{nbr}}$"
-        ax.set_xlabel(x_label, size=14)
-        ax.set_ylabel(y_label, size=14)
-        ax.yaxis.tick_left()
-        ax.xaxis.tick_bottom()
-        ax.spines["right"].set_visible(False)
-        ax.spines["top"].set_visible(False)
-        plt.minorticks_on()
-        plt.tick_params(which="major", width=1, length=4, direction="in")
-        plt.tick_params(which="minor", width=1, length=2, direction="in")
-        plt.tick_params(axis="x", labelsize=12)
-        plt.tick_params(axis="y", labelsize=12)
-        plt.plot(x, p_x, antialiased=True, linewidth=1.0, color="red", label=site_i)
-        if p_x_ref is not None:
-            plt.plot(
-                x,
-                p_x_ref,
+        axes.set_xlabel(x_label, size=14)
+        axes.set_ylabel(y_label, size=14)
+        axes.yaxis.tick_left()
+        axes.xaxis.tick_bottom()
+        axes.spines["right"].set_visible(False)
+        axes.spines["top"].set_visible(False)
+        matplotlib.pyplot.minorticks_on()
+        matplotlib.pyplot.tick_params(which="major", width=1, length=4, direction="in")
+        matplotlib.pyplot.tick_params(which="minor", width=1, length=2, direction="in")
+        matplotlib.pyplot.tick_params(axis="x", labelsize=12)
+        matplotlib.pyplot.tick_params(axis="y", labelsize=12)
+        matplotlib.pyplot.plot(
+            x_values,
+            probability_x,
+            antialiased=True,
+            linewidth=1.0,
+            color="red",
+            label=site_index,
+        )
+        if probability_x_reference is not None:
+            matplotlib.pyplot.plot(
+                x_values,
+                probability_x_reference,
                 antialiased=True,
                 linewidth=1.0,
                 color="green",
                 label="Reference",
             )
-        fig_name = "%03d_" % site_i
-        plt.legend(loc="upper right", prop={"size": 10}, frameon=False)
-        plt.tight_layout()
-        plt.savefig(data_dir + "/" + fig_name + "Enbr_plot.png", dpi=300)
-        plt.close()
+        figure_name = "%03d_" % site_index
+        matplotlib.pyplot.legend(loc="upper right", prop={"size": 10}, frameon=False)
+        matplotlib.pyplot.tight_layout()
+        matplotlib.pyplot.savefig(
+            data_directory + "/" + figure_name + "Enbr_plot.png", dpi=300
+        )
+        matplotlib.pyplot.close()
 
 
-def plot_rtheta(data_dir, site_indices=None):
-    """
-    Parameters
-    ----------
-    data_dir : TYPE
-        Description
-    site_indices : None, optional
-        Description
+def plot_rtheta(
+    data_directory: str,
+    site_indices: typing.Optional[list[int]] = None,
+):
+    rtheta_files: list[str] = []
+    rtheta_data: dict[int, numpy.ndarray] = {}
 
-    """
-    rtheta_files = []
-    rtheta_data = {}
-
-    print(data_dir)
-    if not os.path.isdir(data_dir):
+    print(data_directory)
+    if not os.path.isdir(data_directory):
         sys.exit("Data directory not found, please check path of the directory again.")
 
     if site_indices is None:
-        rtheta_files = [f for f in os.listdir(data_dir) if f.endswith("r_theta.txt")]
+        rtheta_files = [
+            filename
+            for filename in os.listdir(data_directory)
+            if filename.endswith("r_theta.txt")
+        ]
     else:
         rtheta_files = [
-            f
-            for f in os.listdir(data_dir)
-            if f.endswith("r_theta.txt") and int(f[0:3]) in site_indices
+            filename
+            for filename in os.listdir(data_directory)
+            if filename.endswith("r_theta.txt") and int(filename[0:3]) in site_indices
         ]
 
-    for index, file in enumerate(rtheta_files):
-        site_i = int(file[0:3])
-        rtheta_data[site_i] = np.loadtxt(data_dir + "/" + file)
+    for index, filename in enumerate(rtheta_files):
+        site_index = int(filename[0:3])
+        rtheta_data[site_index] = numpy.loadtxt(data_directory + "/" + filename)
 
-    integ_counts = 16.3624445886
-    for index, site_i in enumerate(rtheta_data.keys()):
-        print(("Generating r_theta plot for: ", site_i, rtheta_files[index]))
-        fig = plt.figure()
-        ax = fig.add_subplot(projection="3d")
-        theta = rtheta_data[site_i][:, 0]
-        r = rtheta_data[site_i][:, 1]
-        # Nnbr = len(r)/nwat
-        # print nwat, Nnbr
-        # generate index matrices
-        X, Y = np.mgrid[0:130:131j, 2.0:6.0:41j]
-        # generate kernel density estimates
-        values = np.vstack([theta, r])
-        kernel = stats.gaussian_kde(values)
-        positions = np.vstack([X.ravel(), Y.ravel()])
-        Z = np.reshape(kernel(positions).T, X.shape)
-        Z *= integ_counts * 0.1
-        # Z /= integ_counts
+    integration_counts = 16.3624445886
+    for index, site_index in enumerate(rtheta_data.keys()):
+        print(("Generating r_theta plot for: ", site_index, rtheta_files[index]))
+        figure = matplotlib.pyplot.figure()
+        axes = figure.add_subplot(projection="3d")
+        theta = rtheta_data[site_index][:, 0]
+        radius = rtheta_data[site_index][:, 1]
+
+        x_mesh, y_mesh = numpy.mgrid[0:130:131j, 2.0:6.0:41j]
+        values = numpy.vstack([theta, radius])
+        kernel = scipy.stats.gaussian_kde(values)
+        positions = numpy.vstack([x_mesh.ravel(), y_mesh.ravel()])
+        z_mesh = numpy.reshape(kernel(positions).T, x_mesh.shape)
+        z_mesh *= integration_counts * 0.1
+
         sum_counts_kernel = 0
-        # print kernel.n
-        # correct Z
-        for i in range(0, Y.shape[1]):
-            d = Y[0, i]
-            # get shell_vol
-            d_low = d - 0.1
-            vol = (4.0 / 3.0) * np.pi * (d**3)
-            vol_low = (4.0 / 3.0) * np.pi * (d_low**3)
-            shell_vol = vol - vol_low
-
-            counts_bulk = 0.0329 * shell_vol
-            sum_counts_kernel += np.sum(Z[:, i])
-            # Z[:,i] /= counts_bulk
-            Z[:, i] = Z[:, i], counts_bulk
+        for mesh_index in range(0, y_mesh.shape[1]):
+            distance = y_mesh[0, mesh_index]
+            distance_low = distance - 0.1
+            volume = (4.0 / 3.0) * numpy.pi * (distance**3)
+            volume_low = (4.0 / 3.0) * numpy.pi * (distance_low**3)
+            shell_volume = volume - volume_low
+            counts_bulk = 0.0329 * shell_volume
+            sum_counts_kernel += numpy.sum(z_mesh[:, mesh_index])
+            z_mesh[:, mesh_index] = z_mesh[:, mesh_index], counts_bulk
 
         print(sum_counts_kernel)
-        legend_label = "%03d_" % site_i
-        ax.plot_surface(
-            X,
-            Y,
-            Z,
+        legend_label = "%03d_" % site_index
+        axes.plot_surface(
+            x_mesh,
+            y_mesh,
+            z_mesh,
             rstride=1,
             cstride=1,
             linewidth=0.5,
             antialiased=True,
             alpha=1.0,
-            cmap=cm.coolwarm,
+            cmap=matplotlib.cm.coolwarm,
             label=legend_label,
         )
         x_label = r"$\theta^\circ$"
         y_label = r"$r (\AA)$"
-        ax.set_xlabel(x_label)
-        ax.set_xlim(0, 130)
-        ax.set_ylabel(y_label)
-        ax.set_ylim(2.0, 6.0)
+        axes.set_xlabel(x_label)
+        axes.set_xlim(0, 130)
+        axes.set_ylabel(y_label)
+        axes.set_ylim(2.0, 6.0)
         z_label = r"$\mathrm{P(\theta, \AA)}$"
-        ax.set_zlabel(z_label)
-        # ax.legend(legend_label, loc='upper left', prop={'size':6})
-        # ax.set_zlim(0.0, 0.15)
-        plt.savefig(data_dir + "/" + legend_label + "rtheta_plot.png", dpi=300)
-        plt.close()
+        axes.set_zlabel(z_label)
+        matplotlib.pyplot.savefig(
+            data_directory + "/" + legend_label + "rtheta_plot.png", dpi=300
+        )
+        matplotlib.pyplot.close()
 
 
-def read_hsa_summary(hsa_data_file):
-    """
-    Returns a dictionary with hydration site index as keys and a list of various attributes as values.
-    Parameters
-    ----------
-    hsa_data_file : string
-        Text file containing
-
-    Returns
-    -------
-    """
-
-    f = open(hsa_data_file, "r")
-    data = f.readlines()
+def read_hsa_summary(hsa_data_file: str) -> dict[int, list[float]]:
+    file_handle = open(hsa_data_file, "r")
+    data = file_handle.readlines()
     hsa_header = data[0]
     data_keys = hsa_header.strip("\n").split()
-    hsa_data = {}
-    for l in data[1:]:
-        float_converted_data = [float(x) for x in l.strip("\n").split()[1:27]]
-        hsa_data[int(l.strip("\n").split()[0])] = float_converted_data
-    f.close()
+    hsa_data: dict[int, list[float]] = {}
+    for line in data[1:]:
+        float_converted_data = [float(x) for x in line.strip("\n").split()[1:27]]
+        hsa_data[int(line.strip("\n").split()[0])] = float_converted_data
+    file_handle.close()
     return hsa_data
 
 
-def read_gist_summary(gist_data_file):
-    """
-    Returns a dictionary with hydration site index as keys and a list of various attributes as values.
-    Parameters
-    ----------
-    hsa_data_file : string
-        Text file containing
-
-    Returns
-    -------
-    """
-
-    f = open(hsa_data_file, "r")
-    data = f.readlines()
+def read_gist_summary(gist_data_file: str) -> dict[int, list[float]]:
+    file_handle = open(gist_data_file, "r")
+    data = file_handle.readlines()
     hsa_header = data[0]
     data_keys = hsa_header.strip("\n").split()
-    hsa_data = {}
-    for l in data[1:]:
-        float_converted_data = [float(x) for x in l.strip("\n").split()[1:27]]
-        hsa_data[int(l.strip("\n").split()[0])] = float_converted_data
-    f.close()
+    hsa_data: dict[int, list[float]] = {}
+    for line in data[1:]:
+        float_converted_data = [float(x) for x in line.strip("\n").split()[1:27]]
+        hsa_data[int(line.strip("\n").split()[0])] = float_converted_data
+    file_handle.close()
     return hsa_data
 
 
-def write_watpdb_from_list(coords, filename, water_id_list, full_water_res=False):
-    """Summary
-
-    Parameters
-    ----------
-    traj : TYPE
-        Description
-    filename : TYPE
-        Description
-    water_id_list : None, optional
-        Description
-    wat_coords : None, optional
-        Description
-    full_water_res : bool, optional
-        Description
-
-    Returns
-    -------
-    TYPE
-        Description
-    """
+def write_watpdb_from_list(
+    coordinates: numpy.ndarray,
+    filename: str,
+    water_id_list: list[tuple[int, int]],
+    full_water_residue: bool = False,
+):
     pdb_line_format = "{0:6}{1:>5}  {2:<3}{3:<1}{4:>3} {5:1}{6:>4}{7:1}   {8[0]:>8.3f}{8[1]:>8.3f}{8[2]:>8.3f}{9:>6.2f}{10:>6.2f}{11:>12s}\n"
     ter_line_format = "{0:3}   {1:>5}      {2:>3} {3:1}{4:4} \n"
-    pdb_lines = []
-    # write form the list of (water, frame) tuples
-    # at_index, wat in enumerate(water_id_list):
-    at = 1
-    res = 1
-    with open(filename + ".pdb", "w") as f:
-        for i in range(len(water_id_list)):
-            wat = water_id_list[i]
-            at_index = at  # % 10000
-            res_index = res % 10000
-            # wat_coords = md.utils.in_units_of(
-            #    coords[wat[0], wat[1], :], "nanometers", "angstroms")
-            wat_coords = coords[wat[0], wat[1], :]
-            # chain_id = possible_chains[chain_id_index]
+    pdb_lines: list[str] = []
+
+    atom_number = 1
+    residue_number = 1
+    with open(filename + ".pdb", "w") as file_handle:
+        for water_index in range(len(water_id_list)):
+            water = water_id_list[water_index]
+            atom_index = atom_number
+            residue_index = residue_number % 10000
+            water_coordinates = coordinates[water[0], water[1], :]
             chain_id = "A"
             pdb_line = pdb_line_format.format(
                 "ATOM",
-                at_index,
+                atom_index,
                 "O",
                 " ",
                 "WAT",
                 chain_id,
-                res_index,
+                residue_index,
                 " ",
-                wat_coords,
+                water_coordinates,
                 0.00,
                 0.00,
                 "O",
             )
-            # pdb_lines.append(pdb_line)
-            f.write(pdb_line)
+            file_handle.write(pdb_line)
 
-            if full_water_res:
-                # H1_coords = md.utils.in_units_of(
-                #    coords[wat[0], wat[1] + 1, :], "nanometers", "angstroms")
-                H1_coords = coords[wat[0], wat[1] + 1, :]
-                pdb_line_H1 = pdb_line_format.format(
+            if full_water_residue:
+                hydrogen1_coordinates = coordinates[water[0], water[1] + 1, :]
+                pdb_line_hydrogen1 = pdb_line_format.format(
                     "ATOM",
-                    at_index + 1,
+                    atom_index + 1,
                     "H1",
                     " ",
                     "WAT",
                     chain_id,
-                    res_index,
+                    residue_index,
                     " ",
-                    H1_coords,
+                    hydrogen1_coordinates,
                     0.00,
                     0.00,
                     "H",
                 )
-                # pdb_lines.append(pdb_line_H1)
-                f.write(pdb_line_H1)
-                # H2_coords = md.utils.in_units_of(
-                #    coords[wat[0], wat[1] + 2, :], "nanometers", "angstroms")
-                H2_coords = coords[wat[0], wat[1] + 2, :]
-                pdb_line_H2 = pdb_line_format.format(
+                file_handle.write(pdb_line_hydrogen1)
+                hydrogen2_coordinates = coordinates[water[0], water[1] + 2, :]
+                pdb_line_hydrogen2 = pdb_line_format.format(
                     "ATOM",
-                    at_index + 2,
+                    atom_index + 2,
                     "H2",
                     " ",
                     "WAT",
                     chain_id,
-                    res_index,
+                    residue_index,
                     " ",
-                    H2_coords,
+                    hydrogen2_coordinates,
                     0.00,
                     0.00,
                     "H",
                 )
-                # pdb_lines.append(pdb_line_H2)
-                f.write(pdb_line_H2)
-                at += 3
-                res += 1
+                file_handle.write(pdb_line_hydrogen2)
+                atom_number += 3
+                residue_number += 1
             else:
-                at += 1
-                res += 1
-            if res_index == 9999:
-                ter_line = ter_line_format.format("TER", at, "WAT", chain_id, res_index)
-                at = 1
-                # pdb_lines.append(ter_line)
-    # pdb_lines.append("END")
-    # np.savetxt(filename + ".pdb", np.asarray(pdb_lines), fmt="%s")
+                atom_number += 1
+                residue_number += 1
+            if residue_index == 9999:
+                ter_line = ter_line_format.format(
+                    "TER", atom_number, "WAT", chain_id, residue_index
+                )
+                atom_number = 1
 
 
-def write_watpdb_from_coords(filename, coords, full_water_res=False):
-    """Summary
-
-    Parameters
-    ----------
-    traj : TYPE
-        Description
-    filename : TYPE
-        Description
-    water_id_list : None, optional
-        Description
-    wat_coords : None, optional
-        Description
-    full_water_res : bool, optional
-        Description
-
-    Returns
-    -------
-    TYPE
-        Description
-    """
-
+def write_watpdb_from_coords(
+    filename: str,
+    coordinates: numpy.ndarray,
+    full_water_residue: bool = False,
+):
     pdb_line_format = "{0:6}{1:>5}  {2:<3}{3:<1}{4:>3} {5:1}{6:>4}{7:1}   {8[0]:>8.3f}{8[1]:>8.3f}{8[2]:>8.3f}{9:>6.2f}{10:>6.2f}{11:>12s}\n"
     ter_line_format = "{0:3}   {1:>5}      {2:>3} {3:1}{4:4} \n"
-    pdb_lines = []
-    # write form the list of (water, frame) tuples
-    # at_index, wat in enumerate(water_id_list):
-    at = 0
-    res = 0
-    wat_i = 0
-    with open(filename + ".pdb", "w") as f:
-        f.write("REMARK Initial number of clusters: N/A\n")
-        while wat_i < len(coords):
-            at_index = at  # % 10000
-            res_index = res % 10000
-            # wat_coords = md.utils.in_units_of(
-            #    coords[wat[0], wat[1], :], "nanometers", "angstroms")
-            wat_coords = coords[wat_i]
-            # chain_id = possible_chains[chain_id_index]
+    pdb_lines: list[str] = []
+
+    atom_number = 0
+    residue_number = 0
+    water_index = 0
+    with open(filename + ".pdb", "w") as file_handle:
+        file_handle.write("REMARK Initial number of clusters: N/A\n")
+        while water_index < len(coordinates):
+            atom_index = atom_number
+            residue_index = residue_number % 10000
+            water_coordinates = coordinates[water_index]
             chain_id = "A"
             pdb_line = pdb_line_format.format(
                 "ATOM",
-                at_index,
+                atom_index,
                 "O",
                 " ",
                 "WAT",
                 chain_id,
-                res_index,
+                residue_index,
                 " ",
-                wat_coords,
+                water_coordinates,
                 0.00,
                 0.00,
                 "O",
             )
-            # pdb_lines.append(pdb_line)
-            f.write(pdb_line)
-            wat_i += 1
-            if full_water_res:
-                # H1_coords = md.utils.in_units_of(
-                #    coords[wat[0], wat[1] + 1, :], "nanometers", "angstroms")
-                H1_coords = coords[wat_i]
-                pdb_line_H1 = pdb_line_format.format(
+            file_handle.write(pdb_line)
+            water_index += 1
+            if full_water_residue:
+                hydrogen1_coordinates = coordinates[water_index]
+                pdb_line_hydrogen1 = pdb_line_format.format(
                     "ATOM",
-                    at_index + 1,
+                    atom_index + 1,
                     "H1",
                     " ",
                     "WAT",
                     chain_id,
-                    res_index,
+                    residue_index,
                     " ",
-                    H1_coords,
+                    hydrogen1_coordinates,
                     0.00,
                     0.00,
                     "H",
                 )
-                # pdb_lines.append(pdb_line_H1)
-                f.write(pdb_line_H1)
-                # H2_coords = md.utils.in_units_of(
-                #    coords[wat[0], wat[1] + 2, :], "nanometers", "angstroms")
-                H2_coords = coords[wat_i + 1]
-                pdb_line_H2 = pdb_line_format.format(
+                file_handle.write(pdb_line_hydrogen1)
+                hydrogen2_coordinates = coordinates[water_index + 1]
+                pdb_line_hydrogen2 = pdb_line_format.format(
                     "ATOM",
-                    at_index + 2,
+                    atom_index + 2,
                     "H2",
                     " ",
                     "WAT",
                     chain_id,
-                    res_index,
+                    residue_index,
                     " ",
-                    H2_coords,
+                    hydrogen2_coordinates,
                     0.00,
                     0.00,
                     "H",
                 )
-                # pdb_lines.append(pdb_line_H2)
-                f.write(pdb_line_H2)
-                at += 3
-                res += 1
-                wat_i += 2
+                file_handle.write(pdb_line_hydrogen2)
+                atom_number += 3
+                residue_number += 1
+                water_index += 2
             else:
-                at += 1
-                res += 1
-            if res_index == 9999:
-                ter_line = ter_line_format.format("TER", at, "WAT", chain_id, res_index)
-                at = 1
-                # pdb_lines.append(ter_line)
-    # pdb_lines.append("END")
-    # np.savetxt(filename + ".pdb", np.asarray(pdb_lines), fmt="%s")
+                atom_number += 1
+                residue_number += 1
+            if residue_index == 9999:
+                ter_line = ter_line_format.format(
+                    "TER", atom_number, "WAT", chain_id, residue_index
+                )
+                atom_number = 1
 
-    """
-    pdb_line_format = "{0:6}{1:>5}  {2:<3}{3:<1}{4:>3} {5:1}{6:>4}{7:1}   {8[0]:>8.3f}{8[1]:>8.3f}{8[2]:>8.3f}{9:>6.2f}{10:>6.2f}{11:>12s}\n"
-    ter_line_format = "{0:3}   {1:>5}      {2:>3} {3:1}{4:4} \n"
-    pdb_lines = ["REMARK Initial number of clusters: N/A\n"]
-    # write form the list of (water, frame) tuples
-    for at in range(len(wat_coords)):
-        wat_coord = wat_coords[at]
-        at_index = at % 10000
-        res_index = at % 10000
-        chain_id = "A"
-        pdb_line = pdb_line_format.format(
-            "ATOM", at_index, "O", " ", "WAT", chain_id, res_index, " ", wat_coord, 0.00, 0.00, "O")
-        pdb_lines.append(pdb_line)
-        if res_index == 9999:
-            ter_line = ter_line_format.format(
-                "TER", at_index, "WAT", chain_id, res_index)
-            pdb_lines.append(ter_line)
-    
-    with open(filename + ".pdb", "w") as f:
-        f.write("".join(pdb_lines))
-    
-    """
+
+## classes
 
 
 class GISTFields:

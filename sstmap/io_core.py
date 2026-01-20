@@ -1,195 +1,164 @@
-import os
-import numpy as np
-from string import ascii_uppercase
-from .io_spatial import do_rotation, rotate_check
-from .io_helpers import make_grid, are_you_numpy
-from collections import OrderedDict
-import gzip
+## imports
 
-### Written by T. Wulsdorf, AG Klebe Marburg University
-### 08/2016
+# standard
+import os
+import gzip
+import typing
+import collections
+
+# custom
+import numpy
+import string
+
+# local
+from sstmap import io_spatial
+from sstmap import io_helpers
+
+
+## classes
 
 
 class field(object):
-    """
-    This is a class for operation on generic
-    scalar fields. Like GIST objects, they
-    must be described in cartesian as well as
-    in fractional space. That means that we need
-    origin, frac2real/real2frac matrix(vector)
-    and/or grid spacing vectors vector.
-
-    Tobias Wulsdorf, AG Klebe, 08/2016
-    """
-
-    def __init__(self, Bins, Frac2Real=None, Delta=None, Origin=None, Center=None):
-
-        if type(Frac2Real) == type(None) and type(Delta) == type(None):
-
+    def __init__(
+        self,
+        Bins: numpy.ndarray,
+        Frac2Real: typing.Optional[numpy.ndarray] = None,
+        Delta: typing.Optional[numpy.ndarray] = None,
+        Origin: typing.Optional[numpy.ndarray] = None,
+        Center: typing.Optional[numpy.ndarray] = None,
+    ):
+        if Frac2Real is None and Delta is None:
             raise ValueError("Must provide Frac2Real or Delta.")
 
-        if type(Frac2Real) != type(None) and type(Delta) != type(None):
-
+        if Frac2Real is not None and Delta is not None:
             raise ValueError("Must provide either Frac2Real or Delta.")
 
-        if type(Frac2Real) == type(None):
-
+        if Frac2Real is None:
             self.delta = Delta
-            self.frac2real = np.eye(3, 3) * self.delta
-
+            self.frac2real = numpy.eye(3, 3) * self.delta
         else:
-
             self.frac2real = Frac2Real
-            self.delta = np.linalg.norm(self.frac2real, axis=0)
+            self.delta = numpy.linalg.norm(self.frac2real, axis=0)
 
-        self.real2frac = np.linalg.inv(self.frac2real)
+        self.real2frac = numpy.linalg.inv(self.frac2real)
         self.bins = Bins
+        self.rotation_matrix = numpy.eye(3, 3)
+        self.translation_vector = numpy.zeros(3)
 
-        self.rotation_matrix = np.eye(3, 3)
-        self.translation_vector = np.zeros(3)
-
-        if type(Origin) == type(None) and type(Center) == type(None):
-
+        if Origin is None and Center is None:
             raise ValueError("Must provide origin or Center.")
 
-        if type(Origin) != type(None) and type(Center) != type(None):
-
+        if Origin is not None and Center is not None:
             raise ValueError("Must provide either origin or center.")
 
-        if type(Center) == type(None):
-
+        if Center is None:
             self.origin = Origin
             self.center = self.get_real(self.bins / 2)
-
         else:
-
             self.center = Center
-            # First we need an auxiliary origin at (0,0,0)
-            self.origin = np.zeros(3)
-            # Second translate origin according center displacement
+            self.origin = numpy.zeros(3)
             self.origin = self.center - self.get_real(self.bins / 2)
 
-        self.dim = np.array(
+        self.dim = numpy.array(
             [
-                np.linalg.norm(self.get_real([self.bins[0], 0.0, 0.0]) - self.origin),
-                np.linalg.norm(self.get_real([0.0, self.bins[1], 0.0]) - self.origin),
-                np.linalg.norm(self.get_real([0.0, 0.0, self.bins[2]]) - self.origin),
+                numpy.linalg.norm(
+                    self.get_real([self.bins[0], 0.0, 0.0]) - self.origin
+                ),
+                numpy.linalg.norm(
+                    self.get_real([0.0, self.bins[1], 0.0]) - self.origin
+                ),
+                numpy.linalg.norm(
+                    self.get_real([0.0, 0.0, self.bins[2]]) - self.origin
+                ),
             ]
         )
 
-    def translate(self, vector=np.zeros(3)):
-        """
-        Translatation vector of unit cell origin
-        """
-
+    def translate(self, vector: numpy.ndarray = numpy.zeros(3)):
         self.translation_vector += vector
 
-    def rotate(self, matrix=np.eye(3, 3)):
-        """
-        Rotate the unit cell vectors.
-        """
-
-        rotate_check(matrix)
+    def rotate(self, matrix: numpy.ndarray = numpy.eye(3, 3)):
+        io_spatial.rotate_check(matrix)
         self.rotation_matrix = matrix.dot(self.rotation_matrix)
 
-    def translate_global(self, vector=np.zeros(3)):
-        """
-        Translate global coordinate system
-        along vector.
-        """
-
+    def translate_global(self, vector: numpy.ndarray = numpy.zeros(3)):
         self.origin += vector
 
-    def rotate_global(self, reference_point=np.zeros(3), matrix=np.eye(3, 3)):
-        """
-        Rotate global coordinate system around
-        reference point.
-        """
-
-        rotate_check(matrix)
-        self.origin = do_rotation(self.origin, reference_point, matrix)
-
+    def rotate_global(
+        self,
+        reference_point: numpy.ndarray = numpy.zeros(3),
+        matrix: numpy.ndarray = numpy.eye(3, 3),
+    ):
+        io_spatial.rotate_check(matrix)
+        self.origin = io_spatial.do_rotation(self.origin, reference_point, matrix)
         self.rotate(matrix)
-
-        self.translation_vector = do_rotation(
-            self.translation_vector, np.zeros(3), matrix
+        self.translation_vector = io_spatial.do_rotation(
+            self.translation_vector, numpy.zeros(3), matrix
         )
 
-    def get_nice_frac2real(self):
-
+    def get_nice_frac2real(self) -> numpy.ndarray:
         return self.rotation_matrix.dot(self.frac2real)
 
-    def get_nice_real2frac(self):
+    def get_nice_real2frac(self) -> numpy.ndarray:
+        return numpy.linalg.inv(self.get_nice_frac2real())
 
-        return np.linalg.inv(self.get_nice_frac2real())
-
-    def get_voxel_volume(self):
-        """
-        Returns the volume per grid voxel.
-        """
-
-        return np.absolute(
-            np.cross(self.frac2real[:, 0], self.frac2real[:, 1]).dot(
+    def get_voxel_volume(self) -> float:
+        return numpy.absolute(
+            numpy.cross(self.frac2real[:, 0], self.frac2real[:, 1]).dot(
                 self.frac2real[:, 2]
             )
         )
 
-    def get_frac(self, real_array):
-
-        # Convert to initial real space by inverse translation and rotation
-        initial_reals = do_rotation(
+    def get_frac(self, real_array: numpy.ndarray) -> numpy.ndarray:
+        initial_reals = io_spatial.do_rotation(
             real_array,
             self.origin + self.translation_vector,
-            np.linalg.inv(self.rotation_matrix),
+            numpy.linalg.inv(self.rotation_matrix),
         )
-
-        # Remove origin
         initial_reals -= self.origin + self.translation_vector
-
-        # Convert to initial fractional space
         return initial_reals.dot(self.real2frac)
 
-    def get_real(self, frac_array):
-
-        # Convert to real space
-        reals = np.array(frac_array).dot(self.frac2real)
-
-        # Perform rotation translation
+    def get_real(self, frac_array: numpy.ndarray) -> numpy.ndarray:
+        reals = numpy.array(frac_array).dot(self.frac2real)
         return (
-            do_rotation(reals, np.zeros(3), self.rotation_matrix)
+            io_spatial.do_rotation(reals, numpy.zeros(3), self.rotation_matrix)
             + self.origin
             + self.translation_vector
         )
 
-    def get_centers(self):
-
+    def get_centers(self) -> numpy.ndarray:
         return self.get_real(
-            make_grid(
+            io_helpers.make_grid(
                 (
-                    np.arange(self.bins[0]),
-                    np.arange(self.bins[1]),
-                    np.arange(self.bins[2]),
+                    numpy.arange(self.bins[0]),
+                    numpy.arange(self.bins[1]),
+                    numpy.arange(self.bins[2]),
                 )
             )
         )
 
-    def get_centers_real(self):
-
+    def get_centers_real(self) -> numpy.ndarray:
         return self.get_centers()
 
-    def get_centers_frac(self):
-
-        return make_grid(
-            (np.arange(self.bins[0]), np.arange(self.bins[1]), np.arange(self.bins[2]))
+    def get_centers_frac(self) -> numpy.ndarray:
+        return io_helpers.make_grid(
+            (
+                numpy.arange(self.bins[0]),
+                numpy.arange(self.bins[1]),
+                numpy.arange(self.bins[2]),
+            )
         )
 
 
 class gist(field):
-
     def __init__(
-        self, Bins, Frac2Real=None, Delta=None, Origin=None, Center=None, gist17=False
+        self,
+        Bins: numpy.ndarray,
+        Frac2Real: typing.Optional[numpy.ndarray] = None,
+        Delta: typing.Optional[numpy.ndarray] = None,
+        Origin: typing.Optional[numpy.ndarray] = None,
+        Center: typing.Optional[numpy.ndarray] = None,
+        gist17: bool = False,
     ):
-
         field.__init__(self, Bins, Frac2Real, Delta, Origin, Center)
 
         if type(gist17) != bool:
@@ -197,139 +166,130 @@ class gist(field):
                 "gist17 must be of type bool but is of type %s" % type(gist17)
             )
 
-        ### Compatibility with cpptraj v.17
         self.gist17 = gist17
-
-        ### Number Of nearest neighbours water neighbours
-        ### within 3.5 Ang in bulk.
-        ### This value is calculted with TIP4PEw
-        ### and should be used only in conjunction
-        ### with this water model.
         self.bulk_NN = 5.098076
-        ### Reference energy interaction energy in kcal/mol.
-        ### This value is calculated with TIP4PEW
         self.ref_ene = 11.063656
-        ### Reference density in 1/Ang^3
-        ### This value is calculated with TIP4PEW as well.
         self.ref_rho = 0.0332
 
-        ### Numpy arrays for storing all quantities
-        self.Pop = np.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
-        self.gO = np.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
-        self.gH = np.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
-        self.dTStrans_dens = np.zeros(
+        self.Pop = numpy.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
+        self.gO = numpy.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
+        self.gH = numpy.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
+        self.dTStrans_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.dTStrans_norm = np.zeros(
+        self.dTStrans_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.dTSorient_dens = np.zeros(
+        self.dTSorient_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.dTSorient_norm = np.zeros(
+        self.dTSorient_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.dTSsix_dens = np.zeros(
+        self.dTSsix_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.dTSsix_norm = np.zeros(
+        self.dTSsix_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Esw_dens = np.zeros(
+        self.Esw_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Esw_norm = np.zeros(
+        self.Esw_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Eww_dens = np.zeros(
+        self.Eww_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Eww_norm_unref = np.zeros(
+        self.Eww_norm_unref = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Dipole_x_dens = np.zeros(
+        self.Dipole_x_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Dipole_y_dens = np.zeros(
+        self.Dipole_y_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Dipole_z_dens = np.zeros(
+        self.Dipole_z_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Dipole_dens = np.zeros(
+        self.Dipole_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Neighbor_dens = np.zeros(
+        self.Neighbor_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Neighbor_norm = np.zeros(
+        self.Neighbor_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self.Order_norm = np.zeros(
+        self.Order_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
 
-        self._tmp_Pop = np.zeros(
+        self._tmp_Pop = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_gO = np.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
-        self._tmp_gH = np.zeros([self.bins[0], self.bins[1], self.bins[2]], dtype=float)
-        self._tmp_dTStrans_dens = np.zeros(
+        self._tmp_gO = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_dTStrans_norm = np.zeros(
+        self._tmp_gH = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_dTSorient_dens = np.zeros(
+        self._tmp_dTStrans_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_dTSorient_norm = np.zeros(
+        self._tmp_dTStrans_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_dTSsix_dens = np.zeros(
+        self._tmp_dTSorient_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_dTSsix_norm = np.zeros(
+        self._tmp_dTSorient_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Esw_norm = np.zeros(
+        self._tmp_dTSsix_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Esw_dens = np.zeros(
+        self._tmp_dTSsix_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Eww_dens = np.zeros(
+        self._tmp_Esw_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Eww_norm_unref = np.zeros(
+        self._tmp_Esw_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Dipole_x_dens = np.zeros(
+        self._tmp_Eww_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Dipole_y_dens = np.zeros(
+        self._tmp_Eww_norm_unref = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Dipole_z_dens = np.zeros(
+        self._tmp_Dipole_x_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Dipole_dens = np.zeros(
+        self._tmp_Dipole_y_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Neighbor_dens = np.zeros(
+        self._tmp_Dipole_z_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Neighbor_norm = np.zeros(
+        self._tmp_Dipole_dens = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
-        self._tmp_Order_norm = np.zeros(
+        self._tmp_Neighbor_dens = numpy.zeros(
+            [self.bins[0], self.bins[1], self.bins[2]], dtype=float
+        )
+        self._tmp_Neighbor_norm = numpy.zeros(
+            [self.bins[0], self.bins[1], self.bins[2]], dtype=float
+        )
+        self._tmp_Order_norm = numpy.zeros(
             [self.bins[0], self.bins[1], self.bins[2]], dtype=float
         )
 
         self._update()
 
     def _update(self):
-
         self.Pop = self._tmp_Pop
         self.gO = self._tmp_gO
         self.gH = self._tmp_gH
@@ -351,183 +311,169 @@ class gist(field):
         self.Neighbor_norm = self._tmp_Neighbor_norm
         self.Order_norm = self._tmp_Order_norm
 
-    def cut_round_center(self, bins):
-
-        __doc__ = """
-    bins is the new self.bins attribute of this class.
-    All other attributes (i.e. all scalar fields containing Gist data)
-    will be reshaped and transformed such that the position of the
-    grid center is preserved. Thereby all edges are cut symmetrically around
-    the center.
-
-    Example:
-    
-    bins=[20,20,20] with self.bins=[50,50,50]
-    
-    Here, the original self.bins will be reduced to bins. Thereby, the xedge,
-    yedge and zedge will be truncated such that [0:15] and [35:49] are cut off.
-    """
-
+    def cut_round_center(self, bins: numpy.ndarray):
         if bins.shape[0] != 3:
             print("Target bins array must habe shape (3,)")
         elif self.bins[0] < bins[0] or self.bins[1] < bins[1] or self.bins[2] < bins[2]:
             print("Target bins array must be smaller than original one.")
         else:
             cut = (self.bins - bins) / 2
-            cut_bins = np.array([[cut[0], cut[0]], [cut[1], cut[1]], [cut[2], cut[2]]])
+            cut_bins = numpy.array(
+                [[cut[0], cut[0]], [cut[1], cut[1]], [cut[2], cut[2]]]
+            )
             self.cut(cut_bins)
 
-    def cut(self, cut_bins):
-
-        __doc__ = """
-    cut_bins must be an array of shape (3,2), with
-    [[lower_cut_x, upper_cut_x],
-     [lower_cut_y, upper_cut_y],
-     [lower_cut_z, upper_cut_z]]
-     marking the number of bins cut out at lower and upper
-     boundaries of each dimension.
-    """
-
+    def cut(self, cut_bins: numpy.ndarray):
         self.bins[0] = self.bins[0] - cut_bins[0, 0] - cut_bins[0, 1]
         self.bins[1] = self.bins[1] - cut_bins[1, 0] - cut_bins[1, 1]
         self.bins[2] = self.bins[2] - cut_bins[2, 0] - cut_bins[2, 1]
 
         self.dim = self.bins * self.delta
-        self.n = np.copy(self.bins)
+        self.n = numpy.copy(self.bins)
 
-        self.origin = np.zeros(3)
-        # Second translate origin according to center displacement
+        self.origin = numpy.zeros(3)
         self.origin = self.center - self.get_real(self.bins / 2)
 
-        self._tmp_Pop = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Pop = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_gO = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_gO = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_gH = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_gH = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTStrans_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTStrans_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTStrans_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTStrans_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTSorient_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTSorient_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTSorient_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTSorient_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTSsix_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTSsix_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_dTSsix_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_dTSsix_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Esw_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Esw_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Esw_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Esw_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Eww_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Eww_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Eww_norm_unref = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Eww_norm_unref = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Dipole_x_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Dipole_x_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Dipole_y_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Dipole_y_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Dipole_z_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Dipole_z_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Dipole_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Dipole_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Neighbor_dens = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Neighbor_dens = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Neighbor_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Neighbor_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
-        self._tmp_Order_norm = np.array(
-            np.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
+        self._tmp_Order_norm = numpy.array(
+            numpy.zeros([self.bins[0], self.bins[1], self.bins[2]]), dtype=float
         )
 
-        for x_i, x in enumerate(range(cut_bins[0, 0], cut_bins[0, 0] + self.bins[0])):
-
-            for y_i, y in enumerate(
-                range(cut_bins[1, 0], cut_bins[1, 0] + self.bins[1])
+        for x_index, x in enumerate(
+            range(int(cut_bins[0, 0]), int(cut_bins[0, 0]) + self.bins[0])
+        ):
+            for y_index, y in enumerate(
+                range(int(cut_bins[1, 0]), int(cut_bins[1, 0]) + self.bins[1])
             ):
-
-                for z_i, z in enumerate(
-                    range(cut_bins[2, 0], cut_bins[2, 0] + self.bins[2])
+                for z_index, z in enumerate(
+                    range(int(cut_bins[2, 0]), int(cut_bins[2, 0]) + self.bins[2])
                 ):
-
-                    self._tmp_Pop[x_i][y_i][z_i] = self.Pop[x, y, z]
-                    self._tmp_gO[x_i][y_i][z_i] = self.gO[x, y, z]
-                    self._tmp_gH[x_i][y_i][z_i] = self.gH[x, y, z]
-                    self._tmp_dTStrans_dens[x_i][y_i][z_i] = self.dTStrans_dens[x, y, z]
-                    self._tmp_dTStrans_norm[x_i][y_i][z_i] = self.dTStrans_norm[x, y, z]
-                    self._tmp_dTSorient_dens[x_i][y_i][z_i] = self.dTSorient_dens[
-                        x, y, z
-                    ]
-                    self._tmp_dTSorient_norm[x_i][y_i][z_i] = self.dTSorient_norm[
-                        x, y, z
-                    ]
-                    ### In newer vesions of GIST, Six dimensional translational entropy is reported after
-                    ### dTSorient_norm. For now, we want to skip that.
+                    self._tmp_Pop[x_index][y_index][z_index] = self.Pop[x, y, z]
+                    self._tmp_gO[x_index][y_index][z_index] = self.gO[x, y, z]
+                    self._tmp_gH[x_index][y_index][z_index] = self.gH[x, y, z]
+                    self._tmp_dTStrans_dens[x_index][y_index][z_index] = (
+                        self.dTStrans_dens[x, y, z]
+                    )
+                    self._tmp_dTStrans_norm[x_index][y_index][z_index] = (
+                        self.dTStrans_norm[x, y, z]
+                    )
+                    self._tmp_dTSorient_dens[x_index][y_index][z_index] = (
+                        self.dTSorient_dens[x, y, z]
+                    )
+                    self._tmp_dTSorient_norm[x_index][y_index][z_index] = (
+                        self.dTSorient_norm[x, y, z]
+                    )
                     if self.gist17:
-                        self._tmp_dTSsix_dens[x_i][y_i][z_i] = self.dTSsix_dens[x, y, z]
-                        self._tmp_dTSsix_norm[x_i][y_i][z_i] = self.dTSsix_norm[x, y, z]
-                    self._tmp_Esw_dens[x_i][y_i][z_i] = self.Esw_dens[x, y, z]
-                    self._tmp_Esw_norm[x_i][y_i][z_i] = self.Esw_norm[x, y, z]
-                    self._tmp_Eww_dens[x_i][y_i][z_i] = self.Eww_dens[x, y, z]
-                    self._tmp_Eww_norm_unref[x_i][y_i][z_i] = self.Eww_norm_unref[
+                        self._tmp_dTSsix_dens[x_index][y_index][z_index] = (
+                            self.dTSsix_dens[x, y, z]
+                        )
+                        self._tmp_dTSsix_norm[x_index][y_index][z_index] = (
+                            self.dTSsix_norm[x, y, z]
+                        )
+                    self._tmp_Esw_dens[x_index][y_index][z_index] = self.Esw_dens[
                         x, y, z
                     ]
-                    self._tmp_Dipole_x_dens[x_i][y_i][z_i] = self.Dipole_x_dens[x, y, z]
-                    self._tmp_Dipole_y_dens[x_i][y_i][z_i] = self.Dipole_y_dens[x, y, z]
-                    self._tmp_Dipole_z_dens[x_i][y_i][z_i] = self.Dipole_z_dens[x, y, z]
-                    self._tmp_Dipole_dens[x_i][y_i][z_i] = self.Dipole_dens[x, y, z]
-                    self._tmp_Neighbor_dens[x_i][y_i][z_i] = self.Neighbor_dens[x, y, z]
-                    self._tmp_Neighbor_norm[x_i][y_i][z_i] = self.Neighbor_norm[x, y, z]
-                    self._tmp_Order_norm[x_i][y_i][z_i] = self.Order_norm[x, y, z]
+                    self._tmp_Esw_norm[x_index][y_index][z_index] = self.Esw_norm[
+                        x, y, z
+                    ]
+                    self._tmp_Eww_dens[x_index][y_index][z_index] = self.Eww_dens[
+                        x, y, z
+                    ]
+                    self._tmp_Eww_norm_unref[x_index][y_index][z_index] = (
+                        self.Eww_norm_unref[x, y, z]
+                    )
+                    self._tmp_Dipole_x_dens[x_index][y_index][z_index] = (
+                        self.Dipole_x_dens[x, y, z]
+                    )
+                    self._tmp_Dipole_y_dens[x_index][y_index][z_index] = (
+                        self.Dipole_y_dens[x, y, z]
+                    )
+                    self._tmp_Dipole_z_dens[x_index][y_index][z_index] = (
+                        self.Dipole_z_dens[x, y, z]
+                    )
+                    self._tmp_Dipole_dens[x_index][y_index][z_index] = self.Dipole_dens[
+                        x, y, z
+                    ]
+                    self._tmp_Neighbor_dens[x_index][y_index][z_index] = (
+                        self.Neighbor_dens[x, y, z]
+                    )
+                    self._tmp_Neighbor_norm[x_index][y_index][z_index] = (
+                        self.Neighbor_norm[x, y, z]
+                    )
+                    self._tmp_Order_norm[x_index][y_index][z_index] = self.Order_norm[
+                        x, y, z
+                    ]
 
         self._update()
 
-    def get_nan(self):
+    def get_nan(self) -> numpy.ndarray:
+        temporary = numpy.zeros(self.bins, dtype=bool)
+        temporary[numpy.isnan(self.Pop)] = True
+        return temporary
 
-        __doc__ = """
-    Return array that contains True whereever Population array
-    is np.nan and False elsewhere.
-    """
-        tmp = np.zeros(self.bins, dtype=bool)
-        tmp[np.isnan(self.Pop)] = True
+    def get_pop(self) -> numpy.ndarray:
+        temporary = numpy.zeros(self.bins, dtype=bool)
+        temporary[numpy.where(self.Pop > 0)] = True
+        return temporary
 
-        return tmp
-
-    def get_pop(self):
-
-        __doc__ = """
-    Return array that containes True whereever Population array
-    is greater than zero.
-    """
-
-        tmp = np.zeros(self.bins, dtype=bool)
-        tmp[np.where(self.Pop > 0)] = True
-
-        return tmp
-
-    def write_maps(self, prefix="gist", pymol=True):
-
-        data_dict = OrderedDict()
+    def write_maps(self, prefix: str = "gist", pymol: bool = True):
+        data_dict = collections.OrderedDict()
 
         data_dict["_Pop.dx"] = [self.Pop, 1.0]
         data_dict["_gO.dx"] = [self.gO, 4.0]
@@ -555,21 +501,28 @@ class gist(field):
         data_dict["_Neighbor_dens.dx"] = [self.Neighbor_dens, 0.5]
         data_dict["_Neighbor_norm.dx"] = [self.Neighbor_norm, 1.0]
         data_dict["_Order_norm.dx"] = [self.Order_norm, 5.5]
-        data_dict["_dTS_dens.dx"] = [self.dTStrans_dens + self.dTSorient_dens, 0.2]
-        data_dict["_dTS_norm.dx"] = [self.dTStrans_norm + self.dTSorient_norm, 1.0]
+        data_dict["_dTS_dens.dx"] = [
+            self.dTStrans_dens + self.dTSorient_dens,
+            0.2,
+        ]
+        data_dict["_dTS_norm.dx"] = [
+            self.dTStrans_norm + self.dTSorient_norm,
+            1.0,
+        ]
         data_dict["_E_dens.dx"] = [self.Esw_dens + self.Eww_dens, 0.2]
         data_dict["_E_norm.dx"] = [self.Esw_norm + self.Eww_norm_unref, 1.0]
-        data_dict["_Neighbor_loss_norm.dx"] = [self.Neighbor_norm - self.bulk_NN, 0.5]
+        data_dict["_Neighbor_loss_norm.dx"] = [
+            self.Neighbor_norm - self.bulk_NN,
+            0.5,
+        ]
 
         if pymol:
-
             pymol_string = ""
             pymol_string += "from pymol import cmd\n"
             pymol_string += "from collections import OrderedDict\n"
             pymol_string += "\n"
 
         for name, data in data_dict.items():
-
             write_files(
                 Frac2Real=self.get_nice_frac2real(),
                 Bins=self.bins,
@@ -581,9 +534,7 @@ class gist(field):
             )
 
             if pymol:
-
                 new_name = str(prefix + name).replace(".dx", "")
-
                 pymol_string += "### %s ###\n" % new_name
                 pymol_string += 'cmd.load("./%s")\n' % (prefix + name)
                 pymol_string += 'cmd.isomesh("%s", "%s", level=%s)\n' % (
@@ -595,26 +546,22 @@ class gist(field):
                 pymol_string += "\n"
 
         if pymol:
-
             pymol_string += 'cmd.disable("*_map")\n'
             pymol_string += 'cmd.do("color blue, *_map")\n'
             pymol_string += 'cmd.do("set mesh_negative_color, red")\n'
             pymol_string += 'cmd.do("set mesh_negative_visible")\n'
 
-            with open(prefix + "_pymol.py", "w") as f:
-
-                f.write(pymol_string)
+            with open(prefix + "_pymol.py", "w") as file_handle:
+                file_handle.write(pymol_string)
 
 
 class loadgist(gist):
-
-    def __init__(self, Path, gist17=False):
-
+    def __init__(self, Path: str, gist17: bool = False):
         gist.__init__(
             self,
-            Bins=np.array([50, 50, 50]),
-            Origin=np.array([0, 0, 0]),
-            Delta=np.array([0.5, 0.5, 0.5]),
+            Bins=numpy.array([50, 50, 50]),
+            Origin=numpy.array([0, 0, 0]),
+            Delta=numpy.array([0.5, 0.5, 0.5]),
             gist17=gist17,
         )
 
@@ -630,20 +577,15 @@ class loadgist(gist):
         map_file = map_file_ref.readlines()
         map_file_ref.close()
 
-        ##### Read in the gist-out file produced by the
-        ##### the gist functionality of cpptraj
-
         start_row = -1
 
-        for i, item in enumerate(map_file):
-
+        for line_index, item in enumerate(map_file):
             if (
                 len(item.rstrip().split()) > 1
                 and item.rstrip().split()[0] == "voxel"
                 and item.rstrip().split()[1] == "xcoord"
             ):
-
-                start_row = i + 1
+                start_row = line_index + 1
                 break
 
         z_start = map_file[start_row].rstrip().split()[3]
@@ -654,41 +596,23 @@ class loadgist(gist):
         found_bins_y = False
         found_bins_x = False
 
-        # Find out grid dimensions and bin spacing
-        # We assume that the cell is completely rectangular
-        #
-        # The coordinate data is ordered in opendx like fashion:
-        # The z coordinate is running fastest, then y coordinate,
-        # then x coordinate. E.g.:
-        # (x_0, y_0, z_0), (x_0, y_0, z_1), (x_0, y_0, z_2), ...
-
-        for i, line in enumerate(map_file[start_row + 1 :]):
-
+        for line_index, line in enumerate(map_file[start_row + 1 :]):
             if (
                 found_bins_z
                 and not found_bins_y
                 and line.rstrip().split()[2] == y_start
             ):
-
-                self.bins[1] = (i + 1) // self.bins[2]
-
+                self.bins[1] = (line_index + 1) // self.bins[2]
                 break
 
             if not found_bins_z and line.rstrip().split()[3] == z_start:
-
-                self.bins[2] = i + 1
-
+                self.bins[2] = line_index + 1
                 found_bins_z = True
 
-        ### Now we fill the grids...
-
         self.bins[0] = (len(map_file) - start_row) // (self.bins[2] * self.bins[1])
+        self.n = numpy.copy(self.bins)
 
-        # self.n is only here for historical reasons.
-        # ... and for compatibility with xplor maps!
-        self.n = np.copy(self.bins)
-
-        self.delta = np.array(
+        self.delta = numpy.array(
             [
                 float(
                     map_file[start_row + 1 + self.bins[0] * self.bins[1]]
@@ -705,7 +629,7 @@ class loadgist(gist):
 
         self.dim = self.bins * self.delta
 
-        self.origin = -self.delta * 0.5 + np.array(
+        self.origin = -self.delta * 0.5 + numpy.array(
             [
                 float(map_file[start_row].rstrip().split()[1]),
                 float(map_file[start_row].rstrip().split()[2]),
@@ -713,9 +637,7 @@ class loadgist(gist):
             ]
         )
 
-        ### We assume that all cell angles are 90 deg.
-        ### Cell edges can be of different length
-        self.frac2real = np.array(
+        self.frac2real = numpy.array(
             [
                 [self.dim[0] / self.n[0], 0.0, 0.0],
                 [0.0, self.dim[1] / self.n[1], 0.0],
@@ -723,14 +645,12 @@ class loadgist(gist):
             ]
         )
 
-        self.real2frac = np.linalg.inv(self.frac2real)
-        self.rotation_matrix = np.eye(3, 3)
-        self.translation_vector = np.zeros(3)
+        self.real2frac = numpy.linalg.inv(self.frac2real)
+        self.rotation_matrix = numpy.eye(3, 3)
+        self.translation_vector = numpy.zeros(3)
         self.center = self.get_real(self.bins / 2)
 
-        ###### now we read all the gist-specific data...
-
-        i = 0
+        line_index = 0
 
         if self.gist17:
             skip_col = 2
@@ -738,102 +658,91 @@ class loadgist(gist):
             skip_col = 0
 
         for x in range(0, self.bins[0]):
-
             for y in range(0, self.bins[1]):
-
                 for z in range(0, self.bins[2]):
-
                     self._tmp_Pop[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[4]
+                        map_file[start_row + line_index].rstrip().split()[4]
                     )
                     self._tmp_gO[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[5]
+                        map_file[start_row + line_index].rstrip().split()[5]
                     )
                     self._tmp_gH[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[6]
+                        map_file[start_row + line_index].rstrip().split()[6]
                     )
                     self._tmp_dTStrans_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[7]
+                        map_file[start_row + line_index].rstrip().split()[7]
                     )
                     self._tmp_dTStrans_norm[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[8]
+                        map_file[start_row + line_index].rstrip().split()[8]
                     )
                     self._tmp_dTSorient_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[9]
+                        map_file[start_row + line_index].rstrip().split()[9]
                     )
                     self._tmp_dTSorient_norm[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[10]
+                        map_file[start_row + line_index].rstrip().split()[10]
                     )
-                    ### In newer vesions of GIST, Six dimensional translational entropy is reported after
-                    ### dTSorient_norm. For now, we want to skip that.
                     if self.gist17:
                         self._tmp_dTSsix_dens[x][y][z] = float(
-                            map_file[start_row + i].rstrip().split()[11]
+                            map_file[start_row + line_index].rstrip().split()[11]
                         )
                         self._tmp_dTSsix_norm[x][y][z] = float(
-                            map_file[start_row + i].rstrip().split()[12]
+                            map_file[start_row + line_index].rstrip().split()[12]
                         )
                     self._tmp_Esw_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[11 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[11 + skip_col]
                     )
                     self._tmp_Esw_norm[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[12 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[12 + skip_col]
                     )
                     self._tmp_Eww_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[13 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[13 + skip_col]
                     )
                     self._tmp_Eww_norm_unref[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[14 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[14 + skip_col]
                     )
                     self._tmp_Dipole_x_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[15 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[15 + skip_col]
                     )
                     self._tmp_Dipole_y_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[16 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[16 + skip_col]
                     )
                     self._tmp_Dipole_z_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[17 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[17 + skip_col]
                     )
                     self._tmp_Dipole_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[18 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[18 + skip_col]
                     )
                     self._tmp_Neighbor_dens[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[19 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[19 + skip_col]
                     )
                     self._tmp_Neighbor_norm[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[20 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[20 + skip_col]
                     )
                     self._tmp_Order_norm[x][y][z] = float(
-                        map_file[start_row + i].rstrip().split()[21 + skip_col]
+                        map_file[start_row + line_index].rstrip().split()[21 + skip_col]
                     )
 
-                    i += 1
+                    line_index += 1
 
         self._update()
 
 
 class write_files(object):
-
     def __init__(
         self,
-        Delta=None,
-        Frac2Real=None,
-        Bins=None,
-        Origin=None,
-        Value=None,
-        XYZ=None,
-        X=None,
-        Y=None,
-        Z=None,
-        Format="PDB",
-        Filename=None,
-        Nan_fill=-1.0,
+        Delta: typing.Optional[numpy.ndarray] = None,
+        Frac2Real: typing.Optional[numpy.ndarray] = None,
+        Bins: typing.Optional[numpy.ndarray] = None,
+        Origin: typing.Optional[numpy.ndarray] = None,
+        Value: typing.Optional[numpy.ndarray] = None,
+        XYZ: typing.Optional[numpy.ndarray] = None,
+        X: typing.Optional[numpy.ndarray] = None,
+        Y: typing.Optional[numpy.ndarray] = None,
+        Z: typing.Optional[numpy.ndarray] = None,
+        Format: str = "PDB",
+        Filename: typing.Optional[str] = None,
+        Nan_fill: float = -1.0,
     ):
-        """
-        This class can write different file types.
-        currently only dx and pdb are supported.
-        """
-
         self._delta = Delta
         self._frac2real = Frac2Real
         self._bins = Bins
@@ -848,7 +757,6 @@ class write_files(object):
         self._nan_fill = Nan_fill
 
         if type(self._filename) != str:
-
             self._filename = "output."
             self._filename += self._format
 
@@ -860,57 +768,38 @@ class write_files(object):
 
         data = self._writers[self._format]()
 
-        o = open(self._filename, "w")
-        o.write(data)
-        o.close()
+        output_file = open(self._filename, "w")
+        output_file.write(data)
+        output_file.close()
 
-    def _merge_x_y_z(self):
+    def _merge_x_y_z(self) -> numpy.ndarray:
+        return numpy.stack((self._x, self._y, self._z), axis=1)
 
-        return np.stack((self._x, self._y, self._z), axis=1)
-
-    def _write_PDB(self):
-        """
-        Write a PDB file.
-        This is intended for debugging. It writes all atoms
-        as HETATM of element X with resname MAP.
-        """
-
-        if are_you_numpy(self._xyz):
-
+    def _write_PDB(self) -> str:
+        if io_helpers.are_you_numpy(self._xyz):
             if self._xyz.shape[-1] != 3:
-
                 raise TypeError("XYZ array has wrong shape.")
-
         else:
-
             if not (
-                are_you_numpy(self._x)
-                or are_you_numpy(self._y)
-                or are_you_numpy(self._z)
+                io_helpers.are_you_numpy(self._x)
+                or io_helpers.are_you_numpy(self._y)
+                or io_helpers.are_you_numpy(self._z)
             ):
-
                 raise TypeError(
-                    "If XYZ is not given, x,y and z coordinates\
-                     must be given in separate arrays."
+                    "If XYZ is not given, x,y and z coordinates must be given in separate arrays."
                 )
-
             else:
-
                 self._xyz = self._merge_x_y_z()
 
-        if self._value == None:
-
-            self._value = np.zeros(len(self._xyz), dtype=float)
+        if self._value is None:
+            self._value = numpy.zeros(len(self._xyz), dtype=float)
 
         data = "REMARK File written by write_files.py\n"
 
-        for xyz_i, xyz in enumerate(self._xyz):
-
-            # iterate over uppercase letters
-            chain_id = ascii_uppercase[(len(str(xyz_i + 1)) // 5)]
-
-            atom_counts = xyz_i - (len(str(xyz_i + 1)) // 6) * 100000
-            resi_counts = xyz_i - (len(str(xyz_i + 1)) // 5) * 10000
+        for xyz_index, xyz in enumerate(self._xyz):
+            chain_id = string.ascii_uppercase[(len(str(xyz_index + 1)) // 5)]
+            atom_counts = xyz_index - (len(str(xyz_index + 1)) // 6) * 100000
+            resi_counts = xyz_index - (len(str(xyz_index + 1)) // 5) * 10000
             data += (
                 "%-6s%5d %4s%1s%3s %1s%4d%1s   %8.3f%8.3f%8.3f%6.2f%6.2f          \n"
                 % (
@@ -926,33 +815,28 @@ class write_files(object):
                     xyz[1],
                     xyz[2],
                     0.00,
-                    float(self._value[xyz_i]),
+                    float(self._value[xyz_index]),
                 )
             )
 
         data += "END\n"
-
         return data
 
-    def _write_DX(self):
-        """
-        Writes DX files according to openDX standard.
-        """
-
-        if not (are_you_numpy(self._origin) or are_you_numpy(self._bins)):
-
+    def _write_DX(self) -> str:
+        if not (
+            io_helpers.are_you_numpy(self._origin)
+            or io_helpers.are_you_numpy(self._bins)
+        ):
             raise TypeError("Origin and bins must be given.")
 
-        # This means not (a XOR b) or not (a or b)
-        if are_you_numpy(self._delta) == are_you_numpy(self._frac2real):
-
+        if io_helpers.are_you_numpy(self._delta) == io_helpers.are_you_numpy(
+            self._frac2real
+        ):
             raise TypeError("Either delta or frac2real must be given.")
 
-        if are_you_numpy(self._delta):
-
-            self._frac2real = np.zeros((3, 3), dtype=float)
-
-            np.fill_diagonal(self._frac2real, self._delta)
+        if io_helpers.are_you_numpy(self._delta):
+            self._frac2real = numpy.zeros((3, 3), dtype=float)
+            numpy.fill_diagonal(self._frac2real, self._delta)
 
         data = """object 1 class gridpositions counts %d %d %d
 origin %8.4f %8.4f %8.4f
@@ -983,111 +867,74 @@ object 3 class array type float rank 0 items %d data follows
             self._bins[2] * self._bins[1] * self._bins[0],
         )
 
-        i = 0
-        for x_i in range(0, self._bins[0]):
-
-            for y_i in range(0, self._bins[1]):
-
-                for z_i in range(0, self._bins[2]):
-
-                    ### writing an integer instead of float
-                    ### saves us some disk space
-                    if np.isnan(self._value[x_i][y_i][z_i]):
-
+        item_index = 0
+        for x_index in range(0, self._bins[0]):
+            for y_index in range(0, self._bins[1]):
+                for z_index in range(0, self._bins[2]):
+                    if numpy.isnan(self._value[x_index][y_index][z_index]):
                         data += str(self._nan_fill) + " "
-
                     else:
-
-                        if self._value[x_i][y_i][z_i] == 0.0:
-
+                        if self._value[x_index][y_index][z_index] == 0.0:
                             data += "0 "
-
                         else:
+                            data += str(self._value[x_index][y_index][z_index]) + " "
 
-                            data += str(self._value[x_i][y_i][z_i]) + " "
-
-                    i += 1
-
-                    if i == 3:
-
+                    item_index += 1
+                    if item_index == 3:
                         data += "\n"
-                        i = 0
+                        item_index = 0
         return data
 
-    def _write_GIST(self):
-        """
-        To be implemented...
-        """
-
+    def _write_GIST(self) -> typing.Optional[str]:
         pass
 
 
 class PDB(object):
-    """
-    Class that reads a pdb file and provides pdb type data structure.
-    """
-
-    def __init__(self, Path):
-
+    def __init__(self, Path: str):
         self.path = Path
+        self.crd: list[list[float]] = []
+        self.B: list[str] = []
 
-        self.crd = list()
-        self.B = list()
-
-        with open(self.path, "r") as PDB_file:
-
-            for i, line in enumerate(PDB_file):
-
+        with open(self.path, "r") as pdb_file:
+            for line_index, line in enumerate(pdb_file):
                 if not (line[0:6].rstrip() == "ATOM" or line[0:6].rstrip() == "HETATM"):
-
                     continue
 
-                if i <= 9999:
-
-                    # Coordinates
-                    self.crd.append(list())
+                if line_index <= 9999:
+                    self.crd.append([])
                     self.crd[-1].append(float(line.rstrip()[30:38]))
                     self.crd[-1].append(float(line.rstrip()[38:46]))
                     self.crd[-1].append(float(line.rstrip()[46:54]))
-
-                    # B-Factors
                     self.B.append(line.rstrip()[54:59])
 
-                if 9999 < i <= 99999:
-
-                    # Coordinates
-                    self.crd.append(list())
+                if 9999 < line_index <= 99999:
+                    self.crd.append([])
                     self.crd[-1].append(float(line.rstrip()[31:39]))
                     self.crd[-1].append(float(line.rstrip()[39:47]))
                     self.crd[-1].append(float(line.rstrip()[47:55]))
-
-                    # B-Factors
                     self.B.append(line.rstrip()[55:60])
 
-                if i > 99999:
-
-                    # Coordinates
-                    self.crd.append(list())
+                if line_index > 99999:
+                    self.crd.append([])
                     self.crd[-1].append(float(line.rstrip()[33:41]))
                     self.crd[-1].append(float(line.rstrip()[41:49]))
                     self.crd[-1].append(float(line.rstrip()[49:57]))
-
-                    # B-Factors
                     self.B.append(line.rstrip()[57:62])
 
-        self.crd = np.array(self.crd)
-        self.B = np.array(self.B)
+        self.crd_array = numpy.array(self.crd)
+        self.B_array = numpy.array(self.B)
 
 
-def guess_field(crds, delta=np.array([0.5, 0.5, 0.5])):
+## methods
 
-    _c = np.mean(crds, axis=0)
 
-    _min = np.min((_c - crds), axis=0)
-    _max = np.max((_c - crds), axis=0)
-
-    _b = np.rint(np.abs(_max - _min) / delta + (5.0 / delta))
-
-    del _min, _max
-
-    return field(Bins=_b, Delta=delta, Center=_c)
+def guess_field(
+    coordinates: numpy.ndarray,
+    delta: numpy.ndarray = numpy.array([0.5, 0.5, 0.5]),
+) -> field:
+    center = numpy.mean(coordinates, axis=0)
+    minimum = numpy.min((center - coordinates), axis=0)
+    maximum = numpy.max((center - coordinates), axis=0)
+    bins = numpy.rint(numpy.abs(maximum - minimum) / delta + (5.0 / delta))
+    del minimum, maximum
+    return field(Bins=bins, Delta=delta, Center=center)

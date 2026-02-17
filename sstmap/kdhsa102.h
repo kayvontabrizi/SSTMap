@@ -29,14 +29,14 @@ struct point {
     int dim;
     double* x;
     point();
+    point(const point &other);
+    point& operator=(const point &other);
+    ~point();
     void set_point(double* vals);
     void set_point(const point &p);
-    //~point();
     void print_point();
     void zeros();
     void ones();
-    //void set_dimension(int y);
-
 
 };
 

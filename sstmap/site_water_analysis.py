@@ -892,7 +892,7 @@ class SiteWaterAnalysis(water_analysis.WaterAnalysis):
             "Writing PDB file containing all HSA region water molecules for entropy calculations."
         )
         utils.write_watpdb_from_coords(
-            "within5Aofligand", self.hsa_region_water_coords, full_water_res=True
+            "within5Aofligand", self.hsa_region_water_coords, full_water_residue=True
         )
         print("Done.")
         print("Writing PDB files for all water molecules in each hydration site.")
@@ -902,7 +902,7 @@ class SiteWaterAnalysis(water_analysis.WaterAnalysis):
             utils.write_watpdb_from_coords(
                 "cluster." + cluster_name,
                 self.hsa_dict[site_index][-1][:number_of_waters, :],
-                full_water_res=True,
+                full_water_residue=True,
             )
         print("Done.")
 
@@ -963,7 +963,7 @@ class SiteWaterAnalysis(water_analysis.WaterAnalysis):
 
         coordinates = numpy.loadtxt(input_output_argument, usecols=(6, 7, 8))
         utils.write_watpdb_from_coords(
-            "probable_configs", coordinates, full_water_res=True
+            "probable_configs", coordinates, full_water_residue=True
         )
 
         if os.path.isfile(trans_dat) and os.path.isfile(orient_dat):

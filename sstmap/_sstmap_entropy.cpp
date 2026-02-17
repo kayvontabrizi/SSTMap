@@ -108,7 +108,7 @@ void bruteclust(string cfile, string wfile) {
     //stringstream ss;
     //cout << "cencount" << cencount << endl;
     int j = 0;
-    for (int i = 0; i <= numclust; i++) {
+    for (int i = 0; i < numclust; i++) {
         val = i+1;
         //cout << val << endl;
         if (i < 9) {
@@ -765,8 +765,8 @@ void sixdimprob(string infile) {
     getline(input, stemp); 
     probout << stemp << endl;
 
-    delete dists;
-    delete winners;
+    delete[] dists;
+    delete[] winners;
     input.close();
     probout.close();
 }

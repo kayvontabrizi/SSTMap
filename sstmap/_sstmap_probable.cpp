@@ -146,8 +146,8 @@ int prob(string infile, string outfile) {
         }
     }
 
-    delete distt;
-    delete indt;
+    delete[] distt;
+    delete[] indt;
     //s = trans.run_tree_trans(tmp5);
     //transout << s << endl;
     //transout.close();
@@ -332,8 +332,8 @@ int prob(string infile, string outfile) {
         }
     }
 
-    delete disto;
-    delete indo;
+    delete[] disto;
+    delete[] indo;
 
     /*
         Determined the best water orientation as orienti in array of pts
@@ -400,6 +400,7 @@ int prob(string infile, string outfile) {
         fprintf (pFile, "%-6s%5i %-4s %3s %1s%4i    %8.3f%8.3f%8.3f%6.2f%6.2f\n", name.c_str(), i, atom.c_str(), resname.c_str(), chainid.c_str(), resseq, ox, oy, oz, 0.0, 0.0);
     }
     fclose(pFile);
+    return 0;
 }
 
 int renum(string infile) {
@@ -454,6 +455,7 @@ int renum(string infile) {
 	}
 	input.close();
 	output.close();
+	return 0;
 }
 
 

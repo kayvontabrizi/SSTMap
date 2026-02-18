@@ -261,6 +261,13 @@ void kdhsa102(string infile, string expfile) {
         }
     }
     */
+    if (tmp2.size() < 6) {
+        transout << 0.0 << endl;
+        transout.close();
+        orientout << 0.0 << endl;
+        orientout.close();
+        return;
+    }
     kdtree trans(tmp2);
     //cout << "made trans tree" << endl;
 
@@ -285,7 +292,11 @@ void kdhsa102(string infile, string expfile) {
         }
     }
 
-    s = trans.run_tree_trans(tmp5);
+    if (tmp5.size() >= 3) {
+        s = trans.run_tree_trans(tmp5);
+    } else {
+        s = 0.0;
+    }
     transout << s << endl;
     transout.close();
     /*
@@ -450,6 +461,11 @@ void kdhsa102(string infile, string expfile) {
             tmp3.push_back(atan2(((2*e[1]*e[0])-(2*e[2]*e[3])) , (1 - (2*pow(e[1],2)) - (2*pow(e[3],2)))));
             tmp3.push_back(atan2(((2*e[2]*e[0])-(2*e[1]*e[3])) , (1 - (2*pow(e[2],2)) - (2*pow(e[3],2)))));
         }
+    }
+    if (tmp3.size() < 6) {
+        orientout << 0.0 << endl;
+        orientout.close();
+        return;
     }
     kdtree orient(tmp3);
     s = orient.run_tree_orient();

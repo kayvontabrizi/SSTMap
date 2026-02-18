@@ -226,6 +226,18 @@ kdtree::kdtree(std::vector< double > &vals) {
     double *cp;
     int taskmom[50], taskdim[50];
     for (k = 0; k < npts; k++) ptindx[k] = k;
+    if (npts < 2) {
+        for (j = 0; j < npts; j++) rptindx[j] = j;
+        numbox = 1;
+        boxes = new boxnode[numbox];
+        coord = new double[D * (npts > 0 ? npts : 1)];
+        if (npts == 1) {
+            for (j = 0, kk = 0; j < D; j++, kk += npts) {
+                coord[kk] = pts[0].x[j];
+            }
+        }
+        return;
+    }
     m = 1;
     for (ntmp = npts; ntmp; ntmp >>= 1) {
         m <<= 1;
@@ -237,6 +249,7 @@ kdtree::kdtree(std::vector< double > &vals) {
     //numbox = 2*npts - m/2;
     if (m < numbox) numbox = m;
     numbox--;
+    if (numbox < 3) numbox = 3;
     //cout << "about to make boxes\n";
     //cout << numbox << endl;
     boxes = new boxnode[numbox];

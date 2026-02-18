@@ -8,27 +8,41 @@ point::point () {
     for (int i = 0; i < dim; i++) {
         x[i] = 0;
     }
+}
 
+point::point(const point &other) {
+    dim = other.dim;
+    x = new double[dim];
+    for (int i = 0; i < dim; i++) {
+        x[i] = other.x[i];
+    }
+}
+
+point& point::operator=(const point &other) {
+    if (this != &other) {
+        dim = other.dim;
+        for (int i = 0; i < dim; i++) {
+            x[i] = other.x[i];
+        }
+    }
+    return *this;
+}
+
+point::~point () {
+    delete[] x;
 }
 
 void point::set_point(double* vals) {
-    //dim = d;
-    //x = new double[dim];
     for (int i = 0; i < dim; i++) {
-        x = &vals[i];
+        x[i] = vals[i];
     }
 }
 void point::set_point(const point &p) {
     dim = p.dim;
-    //x = new double[dim];
     for (int i = 0; i < dim; i++) {
         x[i] = p.x[i];
     }
 }
-
-/*point::~point () {
-    delete x;
-}*/
 
 void point::zeros() {
     for (int i = 0; i < dim; i++) {
@@ -328,13 +342,13 @@ kdtree::kdtree(std::vector< double > &vals) {
 
 
 kdtree::~kdtree () {
-    delete boxes;
-    delete ptindx;
-    delete rptindx;
-    delete dn;
-    delete nd;
-    delete coord;
-    //delete within1;
+    delete[] boxes;
+    delete[] pts;
+    delete[] ptindx;
+    delete[] rptindx;
+    delete[] dn;
+    delete[] nd;
+    delete[] coord;
 }
 
 double kdtree::disti(int jpt, int kpt) {
@@ -573,7 +587,7 @@ double kdtree::run_tree_trans(std::vector<double > &cls) {
 
     s = R*T*0.239*(gd/numvals + 0.5772156649)/1000;
 
-    delete dh;
+    delete[] dh;
     return s;
 }
 
